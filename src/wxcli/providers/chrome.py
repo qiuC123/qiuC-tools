@@ -9,6 +9,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from wxcli.browser import BrowserProfile, ProfileLock
+from wxcli.cache import ArticleCache
 from wxcli.errors import ErrorCode, NotFoundError, VerificationRequiredError, WxcliError
 from wxcli.models import Article, Provider
 from wxcli.providers.http import PageKind, PublicHttpProvider, WeChatPageClassifier
@@ -26,14 +27,19 @@ class ChromeProvider:
         browser_profile: BrowserProfile,
         playwright_factory: Callable[[], Any] = sync_playwright,
         chrome_path: Path = CHROME_PATH,
+        cache: ArticleCache | None = None,
     ) -> None:
         self.browser_profile = browser_profile
         self.playwright_factory = playwright_factory
         self.chrome_path = chrome_path
+        self.cache = cache
         self.classifier = WeChatPageClassifier()
 
-    def get(self, url: str) -> Article:
+    def get(self, url: str, *, no_cache: bool = False) -> Article:
         normalized_url = validate_public_url(url)
+        if self.cache and not no_cache:
+            if article := self.cache.get(normalized_url):
+                return article
         html = self._open(normalized_url)
         kind = self.classifier.classify(html)
         if kind is PageKind.VERIFICATION:
@@ -43,7 +49,10 @@ class ChromeProvider:
         if kind is PageKind.ERROR:
             raise WxcliError(ErrorCode.PARSING_ERROR, "The WeChat page is not a readable article.")
         article = PublicHttpProvider._parse(html, normalized_url)
-        return article.model_copy(update={"provider": Provider.CHROME})
+        article = article.model_copy(update={"provider": Provider.CHROME})
+        if self.cache and not no_cache:
+            self.cache.put(normalized_url, article)
+        return article
 
     def open_login(self) -> None:
         """Open a visible login page for up to five minutes; no cookie is exported."""

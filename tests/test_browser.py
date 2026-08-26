@@ -5,11 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import httpx
 
 from wxcli.browser import BrowserProfile, ProfileLock
+from wxcli.cache import ArticleCache
 from wxcli.errors import ErrorCode, WxcliError
 from wxcli.models import Provider
 from wxcli.providers.chrome import ChromeProvider
+from wxcli.providers.http import PublicHttpProvider
 
 
 class FakePage:
@@ -60,3 +63,41 @@ def test_mocked_chrome_provider_uses_chrome_model(tmp_path: Path) -> None:
     article = provider.get("https://mp.weixin.qq.com/s/token")
     assert article.title == "Chrome"
     assert article.provider is Provider.CHROME
+
+
+def test_chrome_success_is_shared_with_http_cache(tmp_path: Path) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+    cache = ArticleCache(tmp_path / "cache")
+    url = "https://mp.weixin.qq.com/s/token"
+    chrome_provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=FakePlaywright,
+        chrome_path=chrome,
+        cache=cache,
+    )
+
+    chrome_article = chrome_provider.get(url)
+    transport = httpx.MockTransport(lambda request: pytest.fail("cache must avoid HTTP"))
+    with httpx.Client(transport=transport) as client:
+        cached_article = PublicHttpProvider(client, cache).get(url)
+
+    assert cached_article == chrome_article
+    assert cached_article.provider is Provider.CHROME
+
+
+def test_chrome_no_cache_neither_reads_nor_writes_cache(tmp_path: Path) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+    cache = ArticleCache(tmp_path / "cache")
+    url = "https://mp.weixin.qq.com/s/token"
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=FakePlaywright,
+        chrome_path=chrome,
+        cache=cache,
+    )
+
+    provider.get(url, no_cache=True)
+
+    assert cache.get(url) is None

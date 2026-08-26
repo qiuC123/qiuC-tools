@@ -147,7 +147,11 @@ def article_from_public_url(
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     if browser:
-        output.success(ChromeProvider(default_browser_profile()).get(url))
+        output.success(
+            ChromeProvider(default_browser_profile(), cache=default_cache()).get(
+                url, no_cache=no_cache
+            )
+        )
         return
     with httpx.Client(timeout=30.0) as client:
         output.success(PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache))
