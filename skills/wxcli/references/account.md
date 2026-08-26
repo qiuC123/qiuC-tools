@@ -48,3 +48,20 @@ wxcli --json account draft get "MEDIA_ID"
 
 `get` 必须使用精确 `media_id`。列表和详情都保留多图文 `articles[]` 及每篇
 文章的 `index`。
+
+## 从 Word 新建未发布草稿
+
+先只生成本地预览；这一步不联网，也不读取凭证：
+
+```powershell
+wxcli --json account draft import-word ".\正文.docx" --cover ".\封面.png" --output ".\草稿预览"
+```
+
+把 `preview.html` 交给用户检查。只有用户明确确认该预览可以上传后，才能执行：
+
+```powershell
+wxcli --json account draft import-word ".\正文.docx" --cover ".\封面.png" --confirm
+```
+
+此命令只新建一个未发布草稿，不发布、不群发，也不修改已有草稿。正文图片上传
+无法回滚；若最后的新建草稿请求失败，应向用户说明错误结果中的已上传图片数量。

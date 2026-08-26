@@ -5,8 +5,8 @@
 1. 校验下载的 ZIP：
 
    ```powershell
-   Get-FileHash .\wxcli-0.1.0-windows-x64.zip -Algorithm SHA256
-   Get-Content .\wxcli-0.1.0-windows-x64.zip.sha256
+   Get-FileHash .\wxcli-0.2.0-windows-x64.zip -Algorithm SHA256
+   Get-Content .\wxcli-0.2.0-windows-x64.zip.sha256
    ```
 
    两处 SHA-256 应完全相同。
@@ -15,14 +15,14 @@
 3. 在解压目录中运行：
 
    ```powershell
-   .\wxcli-0.1.0-windows-x64\wxcli.exe --version
-   .\wxcli-0.1.0-windows-x64\wxcli.exe doctor
+   .\wxcli-0.2.0-windows-x64\wxcli.exe --version
+   .\wxcli-0.2.0-windows-x64\wxcli.exe doctor
    ```
 
 4. 如需在当前 PowerShell 窗口直接输入 `wxcli`，可临时加入 PATH：
 
    ```powershell
-   $env:Path = "$(Resolve-Path .\wxcli-0.1.0-windows-x64);$env:Path"
+   $env:Path = "$(Resolve-Path .\wxcli-0.2.0-windows-x64);$env:Path"
    wxcli --help
    ```
 
@@ -44,7 +44,7 @@
 .\wxcli.exe browser clear
 ```
 
-随后可以删除解压出的 `wxcli-0.1.0-windows-x64` 目录。程序没有安装系统服务，也不会创建外部 Release。
+随后可以删除解压出的 `wxcli-0.2.0-windows-x64` 目录。程序没有安装系统服务，也不会创建外部 Release。
 
 如果还要彻底删除账号配置：
 

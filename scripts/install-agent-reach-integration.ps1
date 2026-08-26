@@ -68,7 +68,9 @@ function Add-AgentReachSkillRoute([string]$SkillRoot) {
         }
         $content = $content.Replace($anchor, "$routeRow`r`n$anchor")
     }
-    $referenceLine = "- [微信公众号](references/wechat.md) — wxcli 只读文章、草稿和已发布内容"
+    $referenceLine = "- [微信公众号](references/wechat.md) — wxcli 文章读取和经确认的 Word 草稿导入"
+    $legacyReferenceLine = "- [微信公众号](references/wechat.md) — wxcli 只读文章、草稿和已发布内容"
+    $content = $content.Replace($legacyReferenceLine, $referenceLine)
     if (-not $content.Contains($referenceLine)) {
         $anchor = "- [网页阅读](references/web.md) — Jina Reader, RSS"
         if (-not $content.Contains($anchor)) {

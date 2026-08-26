@@ -66,4 +66,4 @@ class WeChatChannel(Channel):
 
         self.active_backend = self.backends[0]
         version = probe.output.strip() or "未知版本"
-        return "ok", f"wxcli 可用（{version}，Windows 只读微信公众号后端）"
+        return "ok", f"wxcli 可用（{version}，Windows 微信公众号后端）"

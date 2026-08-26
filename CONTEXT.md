@@ -1,6 +1,6 @@
 # wxcli Content Access
 
-This context names the read-only information that wxcli presents from public WeChat pages, local files, and explicitly authorized Official Account APIs. It deliberately excludes content creation and account administration.
+This context names the information wxcli reads from public WeChat pages, local files, and explicitly authorized Official Account APIs, plus its narrowly scoped creation of new unpublished drafts. It excludes publishing and account administration.
 
 ## Content
 
@@ -31,5 +31,15 @@ A WeChat article URL in one of the two explicitly supported `https://mp.weixin.q
 _Avoid_: WeChat link, share link
 
 **Verification Required**:
-A source result meaning WeChat requires a human browser verification before content can be read. It is not an error to bypass.
+A source result meaning WeChat requires human browser verification before content can be read. It is not permission to bypass verification.
 _Avoid_: captcha failure, anti-bot workaround
+
+## Draft creation
+
+**Draft Import**:
+A local, reversible conversion of one Word document and one cover image into a previewable draft package. It does not contact WeChat.
+_Avoid_: publish, Word upload
+
+**Draft Creation**:
+An explicitly confirmed operation that uploads a prepared package and creates one new unpublished Draft Message. It never publishes, updates, or deletes content.
+_Avoid_: edit公众号, publish article, sync

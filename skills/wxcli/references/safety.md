@@ -42,7 +42,9 @@ stderr。不要把两个 JSON、说明文字或 shell 标记混入 stdout。
 - 不把凭证写入缓存、Git、测试 fixture 或 Agent 对话。
 - 使用脱敏 fixture、模拟 API、临时目录和 fake credential backend 做测试。
 
-## 只读边界
+## 写入边界
 
-wxcli 不提供发布、删除、修改、点赞或评论命令。不要绕过这一限制调用隐藏接口或
-直接请求写 API。
+所有 Provider 都只读。唯一允许的写操作是用户检查本地预览并明确授权后，使用
+`account draft import-word --confirm` 新建一个未发布草稿。wxcli 不提供发布、
+群发、删除、修改已有内容、点赞或评论命令。不要绕过这一限制调用隐藏接口或直接
+请求其他写 API。

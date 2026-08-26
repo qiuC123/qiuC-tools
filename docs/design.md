@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-wxcli is a Windows x64 command-line tool for read-only access to WeChat Official Account content. Its command groups are `article`, `account`, `auth`, `browser`, `cache`, and `doctor`; `--version` reports its version. The tool never publishes, deletes, edits, bypasses verification, or exports cookies.
+wxcli is a Windows x64 command-line tool for reading WeChat Official Account content and, under the approved V2 extension below, explicitly creating one new unpublished draft from Word. Its command groups are `article`, `account`, `auth`, `browser`, `cache`, and `doctor`; `--version` reports its version. The tool never publishes, mass-sends, deletes, edits existing content, bypasses verification, or exports cookies.
 
 ## Runtime and distribution
 
@@ -19,3 +19,7 @@ With `--json`, standard output contains exactly one UTF-8 JSON document. Logs, p
 ## URL, cache, and secrets
 
 Only `https://mp.weixin.qq.com/s/<token>` and `https://mp.weixin.qq.com/s?__biz=...&mid=...` public URLs are accepted. Successful public results may be cached for one hour using a normalized URL shared by HTTP and Chrome; failures are never cached. AppID is ordinary configuration, while AppSecret and access tokens are stored in keyring. No secret, token, or cookie may be placed in command arguments, logs, JSON, Git, or cache files.
+
+## Approved V2 draft-import extension
+
+wxcli may map a local Word `.docx` and a separate cover image into WeChat-safe HTML, preserve paragraph and image order, compress copies to documented WeChat limits, and generate a local preview without network access. A separate explicit `--confirm` action may upload those prepared images and create one new unpublished draft. Providers remain read-only, and wxcli still does not publish, update existing drafts, delete, comment, mass-send, bypass verification, or expose credentials.

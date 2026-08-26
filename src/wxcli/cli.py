@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import httpx
 import typer
@@ -15,8 +16,10 @@ from wxcli.auth import AccessTokenStore, AppIdStore, SecretStore, TokenManager, 
 from wxcli.cache import ArticleCache
 from wxcli.browser import BrowserProfile
 from wxcli.doctor import Doctor
+from wxcli.draft_import import WordDraftImporter
 from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.official_check import OfficialReadOnlyChecker
+from wxcli.official_draft import OfficialDraftWriter
 from wxcli.output import Output, configure_utf8_streams, is_interactive
 from wxcli.providers.local import LocalFileProvider
 from wxcli.providers.http import PublicHttpProvider
@@ -26,7 +29,7 @@ from wxcli.providers.chrome import CHROME_PATH
 
 app = typer.Typer(
     name="wxcli",
-    help="Windows-only, read-only WeChat Official Account CLI.",
+    help="Windows WeChat CLI for content reading and explicitly confirmed draft creation.",
     no_args_is_help=False,
     add_completion=False,
 )
@@ -35,7 +38,7 @@ cache_app = typer.Typer(help="Manage successful public-article cache entries.")
 browser_app = typer.Typer(help="Use the dedicated visible Chrome profile.")
 auth_app = typer.Typer(help="Configure and test Official Account read-only access.")
 account_app = typer.Typer(help="Read drafts and published Official Account messages.")
-draft_app = typer.Typer(help="Read draft messages by media_id.")
+draft_app = typer.Typer(help="Read drafts or explicitly create a new draft from Word.")
 published_app = typer.Typer(help="Read published messages by article_id.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
@@ -76,11 +79,16 @@ def default_auth_stores() -> tuple[AppIdStore, SecretStore, AccessTokenStore]:
 
 def official_provider(client: httpx.Client) -> OfficialAccountProvider:
     """Build the official provider from configured local stores."""
+    return OfficialAccountProvider(client, official_token_manager(client))
+
+
+def official_token_manager(client: httpx.Client) -> TokenManager:
+    """Build the token manager without exposing configured credential values."""
     appids, secrets, tokens = default_auth_stores()
     appid = appids.get()
     if not appid:
         raise WxcliError(ErrorCode.AUTHENTICATION_ERROR, "The AppID is not configured.")
-    return OfficialAccountProvider(client, TokenManager(client, appid, secrets, tokens))
+    return TokenManager(client, appid, secrets, tokens)
 
 
 def default_doctor() -> Doctor:
@@ -110,7 +118,7 @@ def root(
         help="Show the wxcli version and exit.",
     ),
 ) -> None:
-    """Read WeChat Official Account content without modifying it."""
+    """Read WeChat content or explicitly create a new, unpublished draft."""
     output = Output(json_mode=json_mode)
     context.obj = output
     if version:
@@ -275,6 +283,65 @@ def account_draft_get(
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     with httpx.Client(timeout=30.0) as client:
         output.success(official_provider(client).get_draft(media_id))
+
+
+@draft_app.command("import-word")
+def account_draft_import_word(
+    context: typer.Context,
+    path: Path = typer.Argument(..., help="Word .docx article to map without rewriting text."),
+    cover: Path = typer.Option(..., "--cover", help="JPG or PNG cover image."),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Empty directory for the local HTML preview and prepared images.",
+    ),
+    author: str | None = typer.Option(None, "--author", help="Optional author, up to 16 characters."),
+    digest: str | None = typer.Option(None, "--digest", help="Optional digest, up to 120 characters."),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Explicitly upload images and create one new draft; never publishes it.",
+    ),
+) -> None:
+    """Map Word text and images into a new Official Account draft without publishing."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    importer = WordDraftImporter()
+    if not confirm:
+        destination = output_dir or path.parent / f"{path.stem}_wxcli_preview"
+        prepared = importer.prepare(path, cover, destination, author=author, digest=digest)
+        output.success(prepared.preview)
+        return
+
+    if output_dir is not None:
+        prepared = importer.prepare(path, cover, output_dir, author=author, digest=digest)
+        output.diagnostic(
+            f"Creating one unpublished draft: {prepared.title} "
+            f"({len(prepared.images)} body images)."
+        )
+        with httpx.Client(timeout=60.0) as client:
+            output.success(
+                OfficialDraftWriter(client, official_token_manager(client)).create(prepared)
+            )
+        return
+
+    with TemporaryDirectory(prefix="wxcli-draft-") as temporary:
+        prepared = importer.prepare(
+            path,
+            cover,
+            Path(temporary),
+            author=author,
+            digest=digest,
+        )
+        output.diagnostic(
+            f"Creating one unpublished draft: {prepared.title} "
+            f"({len(prepared.images)} body images)."
+        )
+        with httpx.Client(timeout=60.0) as client:
+            output.success(
+                OfficialDraftWriter(client, official_token_manager(client)).create(prepared)
+            )
 
 
 @published_app.command("list")

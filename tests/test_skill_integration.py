@@ -96,5 +96,7 @@ def test_wxcli_skill_contains_required_contracts() -> None:
     assert "VERIFICATION_REQUIRED" in skill
     assert "explicitly authorizes browser mode" in skill
     assert "images[]" in skill
+    assert "import-word --confirm" in skill
+    assert "未发布草稿" in references
     assert "AppSecret" in references
     assert "绕过验证" in references

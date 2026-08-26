@@ -1,6 +1,6 @@
 # wxcli
 
-`wxcli` 是一个仅支持 Windows 的只读微信公众号命令行工具。它可以读取公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文，但不会发布、删除或修改任何内容。
+`wxcli` 是一个仅支持 Windows 的微信公众号命令行工具。它可以读取公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文，也可以把 Word 正文和单独的封面映射成一个新的未发布草稿。它不会发布、群发、删除或修改已有内容。
 
 ## 环境与开发安装
 
@@ -56,6 +56,12 @@ wxcli account draft get MEDIA_ID
 wxcli account published list --offset 0 --count 20
 wxcli account published get ARTICLE_ID
 
+# 先在本地生成预览，不联网、不读取公众号凭证
+wxcli --json account draft import-word ".\正文.docx" --cover ".\封面.png" --output ".\草稿预览"
+
+# 预览确认无误后，才显式创建一个未发布草稿；不会发布或群发
+wxcli --json account draft import-word ".\正文.docx" --cover ".\封面.png" --confirm
+
 # 环境诊断；默认跳过真实网络和账号检查
 wxcli doctor
 wxcli doctor --allow-live-api
@@ -91,9 +97,18 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 | 8 | 页面或接口解析错误 |
 | 9 | 本地配置错误 |
 
+## Word 草稿导入
+
+- 默认只做本地转换，生成 `preview.html`、`manifest.json` 和压缩后的图片副本；原 Word 与原图片不会被改写。
+- Word 标题会成为公众号标题；正文段落、一级标题、粗体、斜体、下划线、文字颜色和行内图片按原顺序映射。页眉、页脚和页码不会进入正文。
+- 当前不接受 Word 表格或同一段中混排文字与图片，遇到时会明确报错，避免静默丢失版式。
+- 正文图片会压缩为小于 1 MB 的 JPEG；封面会压缩为小于 64 KB 的 JPEG。上传后的正文图片 URL 来自微信素材接口。
+- 只有加入 `--confirm` 才会上传图片并创建一个新草稿。微信的图片上传不能回滚；若后续创建草稿失败，错误结果会报告已上传的图片数量。
+
 ## 凭证与安全边界
 
-- 这是只读工具：不发布、不删除、不修改公众号内容。
+- 除显式的 `account draft import-word --confirm` 可新建一个未发布草稿外，其余 Provider 都是只读的。
+- 不发布、不群发、不删除、不修改已有草稿或公众号内容，也不点赞或评论。
 - 不绕过验证码，不导出 Cookie，也不会把浏览器 Cookie 放入命令输出或缓存。
 - AppID 存在普通本地配置中；AppSecret 和 Access Token 存在 Windows 凭据管理器中；状态文件只记录 Token 到期时间。
 - 不要把 AppSecret、Token 或 Cookie 放在命令参数、日志、问题报告或 Git 文件中。
@@ -123,8 +138,8 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 
 ```powershell
 .\scripts\build-release.ps1
-.\dist\release\wxcli-0.1.0-windows-x64\wxcli.exe --version
-Get-FileHash .\dist\release\wxcli-0.1.0-windows-x64.zip -Algorithm SHA256
+.\dist\release\wxcli-0.2.0-windows-x64\wxcli.exe --version
+Get-FileHash .\dist\release\wxcli-0.2.0-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。本项目不会自动上传 GitHub、PyPI 或创建外部 Release。

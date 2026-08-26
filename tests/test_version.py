@@ -21,7 +21,7 @@ def test_no_arguments_shows_help() -> None:
     result = CliRunner().invoke(app, [])
 
     assert result.exit_code == 0
-    assert "read-only" in result.stdout
+    assert "explicitly confirmed draft" in result.stdout
 
 
 def test_json_version_is_a_single_json_document() -> None:

@@ -25,9 +25,12 @@ wxcli --json article get "https://mp.weixin.qq.com/s/TOKEN"
 
 ## 安全边界
 
-- wxcli 只读，不发布、删除或修改内容。
+- wxcli 的读取 Provider 保持只读；唯一写操作是用户检查本地预览并明确授权后，
+  从 Word 新建一个未发布草稿。
+- 不发布、不群发、不删除，也不修改已有内容。
 - 不导出 Cookie，不把 AppSecret 或 Access Token 放入命令参数、日志或 JSON。
-- 官方账号草稿和已发布内容只在用户明确要求时调用。
+- 官方账号草稿和已发布内容只在用户明确要求时调用；Word 草稿上传还必须在本地
+  预览之后再次取得明确确认。
 - `auth test --allow-live-api` 与 `doctor --allow-live-api` 必须取得用户明确授权。
 
 完整命令与模型契约由独立 `wxcli` Skill 提供；Agent Reach 只负责把微信任务路由到
