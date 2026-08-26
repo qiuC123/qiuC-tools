@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+
+# Runtime state: credentials and browser data must never enter Git.
+.wxcli/
+wxcli-profile/
