@@ -14,6 +14,7 @@ from wxcli import __version__
 from wxcli.auth import AccessTokenStore, AppIdStore, SecretStore, TokenManager, default_backend
 from wxcli.cache import ArticleCache
 from wxcli.browser import BrowserProfile
+from wxcli.doctor import Doctor
 from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.output import Output, configure_utf8_streams, is_interactive
@@ -21,6 +22,7 @@ from wxcli.providers.local import LocalFileProvider
 from wxcli.providers.http import PublicHttpProvider
 from wxcli.providers.chrome import ChromeProvider
 from wxcli.providers.official import OfficialAccountProvider
+from wxcli.providers.chrome import CHROME_PATH
 
 app = typer.Typer(
     name="wxcli",
@@ -79,6 +81,19 @@ def official_provider(client: httpx.Client) -> OfficialAccountProvider:
     if not appid:
         raise WxcliError(ErrorCode.AUTHENTICATION_ERROR, "The AppID is not configured.")
     return OfficialAccountProvider(client, TokenManager(client, appid, secrets, tokens))
+
+
+def default_doctor() -> Doctor:
+    """Build the offline-by-default diagnostic runner."""
+    appids, secrets, tokens = default_auth_stores()
+    return Doctor(
+        runtime_root=default_runtime_root(),
+        chrome_path=CHROME_PATH,
+        browser_profile=default_browser_profile(),
+        appids=appids,
+        secrets=secrets,
+        tokens=tokens,
+    )
 
 
 @app.callback(invoke_without_command=True)
@@ -283,6 +298,25 @@ def account_published_get(
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     with httpx.Client(timeout=30.0) as client:
         output.success(official_provider(client).get_published(article_id))
+
+
+@app.command("doctor")
+def doctor_command(
+    context: typer.Context,
+    allow_live_api: bool = typer.Option(
+        False,
+        "--allow-live-api",
+        help="Explicitly authorize real network and read-only account checks.",
+    ),
+) -> None:
+    """Diagnose local prerequisites; skip real network and account checks by default."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    report = default_doctor().run(allow_live_api=allow_live_api)
+    output.success(report)
+    if report.overall == "fail":
+        raise typer.Exit(ExitCode.GENERAL)
 
 
 def main() -> None:

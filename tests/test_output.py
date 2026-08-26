@@ -46,6 +46,39 @@ def test_text_error_goes_to_standard_error() -> None:
     assert stderr.getvalue() == f"{ErrorCode.INVALID_ARGUMENT}: missing URL\n"
 
 
+def test_sensitive_values_are_redacted_from_json_and_diagnostics() -> None:
+    stdout = StringIO()
+    stderr = StringIO()
+    output = Output(json_mode=True, stdout=stdout, stderr=stderr)
+
+    output.success({"access_token": "never-print-me", "nested": {"cookie": "also-secret"}})
+    output.diagnostic("AppSecret=never-print-me")
+
+    assert "never-print-me" not in stdout.getvalue()
+    assert "also-secret" not in stdout.getvalue()
+    assert "never-print-me" not in stderr.getvalue()
+    assert stdout.getvalue().count("[REDACTED]") == 2
+
+
+def test_sensitive_value_is_redacted_from_json_error_message() -> None:
+    stdout = StringIO()
+    output = Output(json_mode=True, stdout=stdout, stderr=StringIO())
+
+    output.error(InputError("access_token=never-print-me"))
+
+    assert "never-print-me" not in stdout.getvalue()
+    assert '"message":"access_token=[REDACTED]"' in stdout.getvalue()
+
+
+def test_authorization_header_is_fully_redacted_from_text() -> None:
+    stderr = StringIO()
+    output = Output(json_mode=False, stdout=StringIO(), stderr=stderr)
+
+    output.diagnostic("Authorization: Bearer never-print-me")
+
+    assert stderr.getvalue() == "Authorization: [REDACTED]\n"
+
+
 def test_each_error_code_has_its_contractual_exit_code() -> None:
     assert ERROR_EXIT_CODES == {
         ErrorCode.GENERAL_ERROR: ExitCode.GENERAL,

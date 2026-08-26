@@ -11,6 +11,7 @@ from typing import Any, TextIO
 from pydantic import BaseModel
 
 from wxcli.errors import WxcliError
+from wxcli.redaction import redact, redact_text
 
 
 def configure_utf8_streams() -> None:
@@ -53,7 +54,7 @@ class Output:
         if self.json_mode:
             self.stdout.write(
                 json.dumps(
-                    {"ok": True, "data": _json_value(data)},
+                    {"ok": True, "data": redact(_json_value(data))},
                     ensure_ascii=False,
                     separators=(",", ":"),
                     default=_json_default,
@@ -70,8 +71,8 @@ class Output:
                 "ok": False,
                 "error": {
                     "code": error.code,
-                    "message": error.message,
-                    "details": error.details,
+                    "message": redact_text(error.message),
+                    "details": redact(error.details),
                 },
             }
             self.stdout.write(
@@ -79,8 +80,8 @@ class Output:
                 + "\n"
             )
             return
-        self.stderr.write(f"{error.code}: {error.message}\n")
+        self.stderr.write(f"{error.code}: {redact_text(error.message)}\n")
 
     def diagnostic(self, message: str) -> None:
         """Write non-result information only to standard error."""
-        self.stderr.write(f"{message}\n")
+        self.stderr.write(f"{redact_text(message)}\n")
