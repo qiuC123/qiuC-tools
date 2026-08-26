@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import typer
 from typer._click.exceptions import Exit, UsageError
 
 from wxcli import __version__
-from wxcli.errors import ExitCode, InputError
+from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.output import Output, configure_utf8_streams
+from wxcli.providers.local import LocalFileProvider
 
 app = typer.Typer(
     name="wxcli",
@@ -17,6 +19,8 @@ app = typer.Typer(
     no_args_is_help=False,
     add_completion=False,
 )
+article_app = typer.Typer(help="Read individual articles without modifying them.")
+app.add_typer(article_app, name="article")
 
 
 @app.callback(invoke_without_command=True)
@@ -46,6 +50,18 @@ def root(
         typer.echo(context.get_help())
 
 
+@article_app.command("local")
+def article_from_local_file(
+    context: typer.Context,
+    path: Path = typer.Argument(..., help="UTF-8 HTML or Markdown file to read."),
+) -> None:
+    """Read a local HTML or Markdown file as an Article."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    output.success(LocalFileProvider().get(path))
+
+
 def main() -> None:
     """Run the command-line application."""
     configure_utf8_streams()
@@ -55,6 +71,9 @@ def main() -> None:
     except UsageError as error:
         Output(json_mode=json_mode).error(InputError("Invalid command-line arguments."))
         raise SystemExit(ExitCode.INPUT) from error
+    except WxcliError as error:
+        Output(json_mode=json_mode).error(error)
+        raise SystemExit(error.exit_code) from error
     except Exit as error:
         raise SystemExit(error.exit_code) from error
 
