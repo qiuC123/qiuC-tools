@@ -17,6 +17,15 @@ mypy src
 wxcli --version
 ```
 
+## Packaging spike
+
+The current packaging check creates a Windows x64 PyInstaller `onedir` folder only; it does not create a release:
+
+```powershell
+.\scripts\build-spike.ps1
+.\dist\spike\wxcli\wxcli.exe --version
+```
+
 ## Security boundary
 
 Secrets, access tokens, cookies, browser profiles, and runtime state are excluded from Git. Future credential setup will store AppSecret and access tokens in the Windows credential manager; it will not accept secrets in command arguments.
