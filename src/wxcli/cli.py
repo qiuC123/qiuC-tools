@@ -20,6 +20,7 @@ from wxcli.output import Output, configure_utf8_streams, is_interactive
 from wxcli.providers.local import LocalFileProvider
 from wxcli.providers.http import PublicHttpProvider
 from wxcli.providers.chrome import ChromeProvider
+from wxcli.providers.official import OfficialAccountProvider
 
 app = typer.Typer(
     name="wxcli",
@@ -31,10 +32,16 @@ article_app = typer.Typer(help="Read individual articles without modifying them.
 cache_app = typer.Typer(help="Manage successful public-article cache entries.")
 browser_app = typer.Typer(help="Use the dedicated visible Chrome profile.")
 auth_app = typer.Typer(help="Configure and test Official Account read-only access.")
+account_app = typer.Typer(help="Read drafts and published Official Account messages.")
+draft_app = typer.Typer(help="Read draft messages by media_id.")
+published_app = typer.Typer(help="Read published messages by article_id.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
 app.add_typer(browser_app, name="browser")
 app.add_typer(auth_app, name="auth")
+app.add_typer(account_app, name="account")
+account_app.add_typer(draft_app, name="draft")
+account_app.add_typer(published_app, name="published")
 
 
 def default_cache() -> ArticleCache:
@@ -63,6 +70,15 @@ def default_auth_stores() -> tuple[AppIdStore, SecretStore, AccessTokenStore]:
         SecretStore(backend),
         AccessTokenStore(backend, root / "token-state.json"),
     )
+
+
+def official_provider(client: httpx.Client) -> OfficialAccountProvider:
+    """Build the official provider from configured local stores."""
+    appids, secrets, tokens = default_auth_stores()
+    appid = appids.get()
+    if not appid:
+        raise WxcliError(ErrorCode.AUTHENTICATION_ERROR, "The AppID is not configured.")
+    return OfficialAccountProvider(client, TokenManager(client, appid, secrets, tokens))
 
 
 @app.callback(invoke_without_command=True)
@@ -213,6 +229,60 @@ def auth_test(
     with httpx.Client(timeout=30.0) as client:
         manager = TokenManager(client, appid, secrets, tokens)
         output.success(OfficialReadOnlyChecker(client, manager).run())
+
+
+@draft_app.command("list")
+def account_draft_list(
+    context: typer.Context,
+    offset: int = typer.Option(0, min=0, help="Zero-based result offset."),
+    count: int = typer.Option(20, min=1, max=20, help="Number of messages, from 1 to 20."),
+) -> None:
+    """List draft messages, preserving every article and its index."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        output.success(official_provider(client).list_drafts(offset=offset, count=count))
+
+
+@draft_app.command("get")
+def account_draft_get(
+    context: typer.Context,
+    media_id: str = typer.Argument(..., help="Exact draft media_id."),
+) -> None:
+    """Get one draft by its exact media_id."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        output.success(official_provider(client).get_draft(media_id))
+
+
+@published_app.command("list")
+def account_published_list(
+    context: typer.Context,
+    offset: int = typer.Option(0, min=0, help="Zero-based result offset."),
+    count: int = typer.Option(20, min=1, max=20, help="Number of messages, from 1 to 20."),
+) -> None:
+    """List published messages, preserving every article and its index."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        output.success(official_provider(client).list_published(offset=offset, count=count))
+
+
+@published_app.command("get")
+def account_published_get(
+    context: typer.Context,
+    article_id: str = typer.Argument(..., help="Exact published article_id."),
+) -> None:
+    """Get one published message by its exact article_id."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        output.success(official_provider(client).get_published(article_id))
 
 
 def main() -> None:

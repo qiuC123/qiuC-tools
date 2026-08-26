@@ -56,3 +56,11 @@ def test_json_invalid_option_is_a_single_json_error(
             "details": {},
         },
     }
+
+
+def test_account_command_exposes_draft_and_published_groups() -> None:
+    result = CliRunner().invoke(app, ["account", "--help"])
+
+    assert result.exit_code == 0
+    assert "draft" in result.stdout
+    assert "published" in result.stdout

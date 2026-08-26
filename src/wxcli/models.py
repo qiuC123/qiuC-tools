@@ -22,6 +22,7 @@ class Article(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    index: int = Field(default=0, ge=0)
     title: str
     content_markdown: str
     source_url: HttpUrl | None = None
