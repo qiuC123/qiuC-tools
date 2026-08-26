@@ -1,0 +1,4 @@
+interface:
+  display_name: "wxcli"
+  short_description: "通过 wxcli 安全读取微信公众号文章、草稿和已发布内容"
+  default_prompt: "使用 $wxcli 读取这个微信公众号链接并返回结构化结果。"
