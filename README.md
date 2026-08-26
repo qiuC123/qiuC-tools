@@ -119,11 +119,12 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 
 ## Windows 打包
 
-项目默认发布方式是 Windows x64 的 PyInstaller `onedir` 目录加 ZIP，不强制制作单文件 EXE。当前打包脚本用于最小可运行验证：
+项目默认发布方式是 Windows x64 的 PyInstaller `onedir` 目录加 ZIP，不制作单文件 EXE。正式构建会在 `build` 下创建隔离的 Python 3.12 环境，完成脱离开发 venv 的冒烟测试，然后生成目录、ZIP 和 SHA-256：
 
 ```powershell
-.\scripts\build-spike.ps1
-.\dist\spike\wxcli\wxcli.exe --version
+.\scripts\build-release.ps1
+.\dist\release\wxcli-0.1.0-windows-x64\wxcli.exe --version
+Get-FileHash .\dist\release\wxcli-0.1.0-windows-x64.zip -Algorithm SHA256
 ```
 
-正式发布物将在最终清洁构建步骤生成，并附带 SHA-256；本项目不会自动上传 GitHub、PyPI 或创建外部 Release。
+正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。本项目不会自动上传 GitHub、PyPI 或创建外部 Release。
