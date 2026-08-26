@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
+import httpx
 import typer
 from typer._click.exceptions import Exit, UsageError
 
 from wxcli import __version__
+from wxcli.cache import ArticleCache
 from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.output import Output, configure_utf8_streams
 from wxcli.providers.local import LocalFileProvider
+from wxcli.providers.http import PublicHttpProvider
 
 app = typer.Typer(
     name="wxcli",
@@ -20,7 +24,15 @@ app = typer.Typer(
     add_completion=False,
 )
 article_app = typer.Typer(help="Read individual articles without modifying them.")
+cache_app = typer.Typer(help="Manage successful public-article cache entries.")
 app.add_typer(article_app, name="article")
+app.add_typer(cache_app, name="cache")
+
+
+def default_cache() -> ArticleCache:
+    """Return the per-user runtime cache without storing credentials there."""
+    root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    return ArticleCache(root / "wxcli" / "cache")
 
 
 @app.callback(invoke_without_command=True)
@@ -60,6 +72,29 @@ def article_from_local_file(
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     output.success(LocalFileProvider().get(path))
+
+
+@article_app.command("get")
+def article_from_public_url(
+    context: typer.Context,
+    url: str = typer.Argument(..., help="Supported public WeChat article URL."),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Do not read or write cache."),
+) -> None:
+    """Read a supported public article URL through HTTP."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        output.success(PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache))
+
+
+@cache_app.command("clear")
+def clear_cache(context: typer.Context) -> None:
+    """Delete only successful public article cache records."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    output.success({"cleared": default_cache().clear()})
 
 
 def main() -> None:
