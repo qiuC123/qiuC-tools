@@ -11,10 +11,12 @@ import typer
 from typer._click.exceptions import Exit, UsageError
 
 from wxcli import __version__
+from wxcli.auth import AccessTokenStore, AppIdStore, SecretStore, TokenManager, default_backend
 from wxcli.cache import ArticleCache
 from wxcli.browser import BrowserProfile
 from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
-from wxcli.output import Output, configure_utf8_streams
+from wxcli.official_check import OfficialReadOnlyChecker
+from wxcli.output import Output, configure_utf8_streams, is_interactive
 from wxcli.providers.local import LocalFileProvider
 from wxcli.providers.http import PublicHttpProvider
 from wxcli.providers.chrome import ChromeProvider
@@ -28,9 +30,11 @@ app = typer.Typer(
 article_app = typer.Typer(help="Read individual articles without modifying them.")
 cache_app = typer.Typer(help="Manage successful public-article cache entries.")
 browser_app = typer.Typer(help="Use the dedicated visible Chrome profile.")
+auth_app = typer.Typer(help="Configure and test Official Account read-only access.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
 app.add_typer(browser_app, name="browser")
+app.add_typer(auth_app, name="auth")
 
 
 def default_cache() -> ArticleCache:
@@ -43,6 +47,22 @@ def default_browser_profile() -> BrowserProfile:
     """Return wxcli's independent profile and local status paths."""
     root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "wxcli"
     return BrowserProfile(root / "chrome-profile", root / "browser-state.json")
+
+
+def default_runtime_root() -> Path:
+    """Return the per-user directory for non-secret config and state."""
+    return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "wxcli"
+
+
+def default_auth_stores() -> tuple[AppIdStore, SecretStore, AccessTokenStore]:
+    """Build auth stores without reading or exposing any credential values."""
+    root = default_runtime_root()
+    backend = default_backend()
+    return (
+        AppIdStore(root / "config.json"),
+        SecretStore(backend),
+        AccessTokenStore(backend, root / "token-state.json"),
+    )
 
 
 @app.callback(invoke_without_command=True)
@@ -140,6 +160,59 @@ def browser_clear(context: typer.Context) -> None:
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     default_browser_profile().clear()
     output.success({"cleared": True})
+
+
+@auth_app.command("configure")
+def auth_configure(context: typer.Context) -> None:
+    """Interactively store AppID and AppSecret in their approved locations."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    if output.json_mode or not is_interactive():
+        raise InputError("Credential setup requires an interactive terminal.")
+    appid = typer.prompt("AppID", err=True)
+    secret = typer.prompt("AppSecret", hide_input=True, confirmation_prompt=True, err=True)
+    appids, secrets, tokens = default_auth_stores()
+    appids.put(appid)
+    secrets.set_app_secret(secret)
+    tokens.clear()
+    output.success({"configured": True})
+
+
+@auth_app.command("status")
+def auth_status(context: typer.Context) -> None:
+    """Report only whether credentials exist; never print their values."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    appids, secrets, _ = default_auth_stores()
+    output.success(
+        {"appid_configured": appids.get() is not None, "appsecret_configured": secrets.get_app_secret() is not None}
+    )
+
+
+@auth_app.command("test")
+def auth_test(
+    context: typer.Context,
+    allow_live_api: bool = typer.Option(
+        False,
+        "--allow-live-api",
+        help="Explicitly authorize real read-only WeChat API requests.",
+    ),
+) -> None:
+    """Check stable token and read-only list permissions without forcing refresh."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    if not allow_live_api:
+        raise InputError("Real API checks require --allow-live-api.")
+    appids, secrets, tokens = default_auth_stores()
+    appid = appids.get()
+    if not appid:
+        raise WxcliError(ErrorCode.AUTHENTICATION_ERROR, "The AppID is not configured.")
+    with httpx.Client(timeout=30.0) as client:
+        manager = TokenManager(client, appid, secrets, tokens)
+        output.success(OfficialReadOnlyChecker(client, manager).run())
 
 
 def main() -> None:

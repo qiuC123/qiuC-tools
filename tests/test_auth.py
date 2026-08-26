@@ -191,6 +191,31 @@ def test_official_error_mapping(errcode: int, expected: ErrorCode) -> None:
     assert raised.value.details == {"errcode": errcode}
 
 
+def test_ip_error_extracts_only_the_public_ip() -> None:
+    with pytest.raises(WxcliError) as raised:
+        raise_for_official_error(
+            {"errcode": 40164, "errmsg": "invalid ip 203.0.113.42; trace and other text"}
+        )
+    assert raised.value.details == {"errcode": 40164, "current_ip": "203.0.113.42"}
+
+
+def test_stable_token_maps_ip_allowlist_error(tmp_path: Path) -> None:
+    backend = FakeBackend()
+    SecretStore(backend).set_app_secret(SECRET)
+    manager, _ = make_manager(
+        backend,
+        tmp_path / "token-state.json",
+        lambda request: httpx.Response(
+            200, json={"errcode": 40164, "errmsg": "invalid ip 203.0.113.42"}
+        ),
+    )
+
+    with pytest.raises(WxcliError) as raised:
+        manager.get_token()
+    assert raised.value.code is ErrorCode.AUTHENTICATION_ERROR
+    assert raised.value.details == {"errcode": 40164, "current_ip": "203.0.113.42"}
+
+
 def test_with_token_retry_force_refreshes_once_and_retries(tmp_path: Path) -> None:
     backend = FakeBackend()
     SecretStore(backend).set_app_secret(SECRET)

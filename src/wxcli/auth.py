@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -187,10 +188,15 @@ def raise_for_official_error(payload: Mapping[str, Any]) -> None:
         return
     raise_if_token_invalid(payload)
     if errcode in {40164, 61004}:
+        details: dict[str, Any] = {"errcode": errcode}
+        message = payload.get("errmsg")
+        if isinstance(message, str):
+            if ip_match := re.search(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", message):
+                details["current_ip"] = ip_match.group(0)
         raise WxcliError(
             ErrorCode.AUTHENTICATION_ERROR,
             "The current public IP is not allowed by the Official Account configuration.",
-            {"errcode": errcode},
+            details,
         )
     if errcode == 48001:
         raise WxcliError(
@@ -260,6 +266,11 @@ class TokenManager:
             payload = response.json()
         except ValueError as error:
             raise WxcliError(ErrorCode.NETWORK_ERROR, "The token endpoint returned an invalid response.") from error
+        if not isinstance(payload, dict):
+            raise WxcliError(ErrorCode.NETWORK_ERROR, "The token endpoint returned an invalid response.")
+        errcode = payload.get("errcode")
+        if errcode in {40164, 61004, 48001, 45009, 45011}:
+            raise_for_official_error(payload)
         access_token = payload.get("access_token")
         expires_in = payload.get("expires_in")
         if response.status_code != 200 or not isinstance(access_token, str) or not isinstance(expires_in, int | float):
