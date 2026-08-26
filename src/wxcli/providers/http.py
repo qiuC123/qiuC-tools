@@ -77,13 +77,14 @@ class PublicHttpProvider:
             self.cache.put(normalized_url, article)
         return article
 
-    def _parse(self, html: str, url: str) -> Article:
+    @staticmethod
+    def _parse(html: str, url: str) -> Article:
         soup = BeautifulSoup(html, "lxml")
         content = soup.select_one("#js_content")
-        title = self._text(soup.select_one("#activity-name")) or self._og(soup, "og:title")
+        title = PublicHttpProvider._text(soup.select_one("#activity-name")) or PublicHttpProvider._og(soup, "og:title")
         if not content or not title:
             raise WxcliError(ErrorCode.PARSING_ERROR, "The article page is missing required content.")
-        images = self._images(content)
+        images = PublicHttpProvider._images(content)
         for image in content.select("img"):
             if data_src := image.get("data-src"):
                 image["src"] = str(data_src)
@@ -91,8 +92,8 @@ class PublicHttpProvider:
             title=title,
             content_markdown=markdownify(str(content), heading_style="ATX").strip(),
             source_url=cast(HttpUrl, url),
-            author=self._text(soup.select_one("#js_name")) or None,
-            published_at=self._published_at(html),
+            author=PublicHttpProvider._text(soup.select_one("#js_name")) or None,
+            published_at=PublicHttpProvider._published_at(html),
             images=images,
             provider=Provider.HTTP,
         )

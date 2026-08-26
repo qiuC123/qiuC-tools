@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, TextIO
 
 from pydantic import BaseModel
@@ -31,6 +32,14 @@ def _json_value(value: Any) -> Any:
     return value
 
 
+def _json_default(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, datetime):
+        return value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 @dataclass(frozen=True, slots=True)
 class Output:
     """A command-scoped writer that keeps JSON stdout machine-readable."""
@@ -47,6 +56,7 @@ class Output:
                     {"ok": True, "data": _json_value(data)},
                     ensure_ascii=False,
                     separators=(",", ":"),
+                    default=_json_default,
                 )
                 + "\n"
             )
@@ -65,7 +75,8 @@ class Output:
                 },
             }
             self.stdout.write(
-                json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=_json_default)
+                + "\n"
             )
             return
         self.stderr.write(f"{error.code}: {error.message}\n")

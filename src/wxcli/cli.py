@@ -12,10 +12,12 @@ from typer._click.exceptions import Exit, UsageError
 
 from wxcli import __version__
 from wxcli.cache import ArticleCache
+from wxcli.browser import BrowserProfile
 from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.output import Output, configure_utf8_streams
 from wxcli.providers.local import LocalFileProvider
 from wxcli.providers.http import PublicHttpProvider
+from wxcli.providers.chrome import ChromeProvider
 
 app = typer.Typer(
     name="wxcli",
@@ -25,14 +27,22 @@ app = typer.Typer(
 )
 article_app = typer.Typer(help="Read individual articles without modifying them.")
 cache_app = typer.Typer(help="Manage successful public-article cache entries.")
+browser_app = typer.Typer(help="Use the dedicated visible Chrome profile.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
+app.add_typer(browser_app, name="browser")
 
 
 def default_cache() -> ArticleCache:
     """Return the per-user runtime cache without storing credentials there."""
     root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     return ArticleCache(root / "wxcli" / "cache")
+
+
+def default_browser_profile() -> BrowserProfile:
+    """Return wxcli's independent profile and local status paths."""
+    root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "wxcli"
+    return BrowserProfile(root / "chrome-profile", root / "browser-state.json")
 
 
 @app.callback(invoke_without_command=True)
@@ -79,11 +89,15 @@ def article_from_public_url(
     context: typer.Context,
     url: str = typer.Argument(..., help="Supported public WeChat article URL."),
     no_cache: bool = typer.Option(False, "--no-cache", help="Do not read or write cache."),
+    browser: bool = typer.Option(False, "--browser", help="Open visible Chrome for this request."),
 ) -> None:
     """Read a supported public article URL through HTTP."""
     output = context.find_root().obj
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    if browser:
+        output.success(ChromeProvider(default_browser_profile()).get(url))
+        return
     with httpx.Client(timeout=30.0) as client:
         output.success(PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache))
 
@@ -95,6 +109,37 @@ def clear_cache(context: typer.Context) -> None:
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     output.success({"cleared": default_cache().clear()})
+
+
+@browser_app.command("login")
+def browser_login(context: typer.Context) -> None:
+    """Open the dedicated visible Chrome profile for manual WeChat login."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    output.diagnostic("Chrome is opening with the wxcli-only profile.")
+    ChromeProvider(default_browser_profile()).open_login()
+    output.success({"opened": True})
+
+
+@browser_app.command("status")
+def browser_status(context: typer.Context) -> None:
+    """Report local profile facts without starting Chrome."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    status = default_browser_profile().status()
+    output.success({"profile_exists": status.profile_exists, "last_verified_at": status.last_verified_at})
+
+
+@browser_app.command("clear")
+def browser_clear(context: typer.Context) -> None:
+    """Delete only wxcli's dedicated Chrome profile and local status record."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    default_browser_profile().clear()
+    output.success({"cleared": True})
 
 
 def main() -> None:

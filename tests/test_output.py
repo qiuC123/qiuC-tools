@@ -1,6 +1,7 @@
 """Tests for structured output and expected errors."""
 
 from io import StringIO
+from datetime import UTC, datetime
 
 from wxcli.errors import ERROR_EXIT_CODES, ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.output import Output
@@ -25,6 +26,15 @@ def test_json_error_contains_safe_machine_code() -> None:
         '{"ok":false,"error":{"code":"INVALID_ARGUMENT",'
         '"message":"缺少 URL","details":{"field":"url"}}}\n'
     )
+
+
+def test_json_output_serializes_timestamps() -> None:
+    stdout = StringIO()
+    output = Output(json_mode=True, stdout=stdout, stderr=StringIO())
+
+    output.success({"last_verified_at": datetime(2026, 8, 26, tzinfo=UTC)})
+
+    assert '"last_verified_at":"2026-08-26T00:00:00+00:00"' in stdout.getvalue()
 
 
 def test_text_error_goes_to_standard_error() -> None:
