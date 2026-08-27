@@ -223,6 +223,92 @@ def test_readback_mismatch_reports_created_media_id(tmp_path: Path) -> None:
     assert raised.value.details["verification"]["verified"] is False
 
 
+def test_readback_accepts_wechat_qpic_rendition_normalization() -> None:
+    expected = "http://mmbiz.qpic.cn/mmbiz_png/asset-alpha/0?from=appmsg"
+    actual = (
+        "https://mmbiz.qpic.cn/mmbiz_png/asset-alpha/640"
+        "?from=appmsg&wx_fmt=png"
+    )
+    writer = OfficialDraftWriter(
+        httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json={
+                        "news_item": [{
+                            "title": "示例标题",
+                            "content": f'<img src="{actual}" />',
+                        }]
+                    },
+                )
+            )
+        ),
+        RetryTokens(),
+    )
+
+    result = writer.verify(
+        "draft-media",
+        0,
+        "示例标题",
+        f'<img src="{expected}" />',
+        [expected],
+    )
+
+    assert result.image_order_matches is True
+    assert result.verified is True
+
+
+@pytest.mark.parametrize(
+    "actual_images",
+    [
+        ["https://mmbiz.qpic.cn/mmbiz_png/asset-other/640?from=appmsg"],
+        ["https://mmbiz.qpic.cn.evil.test/mmbiz_png/asset-alpha/640?from=appmsg"],
+        [
+            "https://mmbiz.qpic.cn/mmbiz_png/asset-beta/640?from=appmsg",
+            "https://mmbiz.qpic.cn/mmbiz_png/asset-alpha/640?from=appmsg",
+        ],
+    ],
+)
+def test_readback_rejects_different_qpic_asset_host_or_order(
+    actual_images: list[str],
+) -> None:
+    expected_images = [
+        "http://mmbiz.qpic.cn/mmbiz_png/asset-alpha/0?from=appmsg",
+    ]
+    if len(actual_images) == 2:
+        expected_images.append(
+            "http://mmbiz.qpic.cn/mmbiz_png/asset-beta/0?from=appmsg"
+        )
+    actual_content = "".join(f'<img src="{url}" />' for url in actual_images)
+    writer = OfficialDraftWriter(
+        httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json={
+                        "news_item": [{
+                            "title": "示例标题",
+                            "content": actual_content,
+                        }]
+                    },
+                )
+            )
+        ),
+        RetryTokens(),
+    )
+
+    with pytest.raises(WxcliError, match="readback verification") as raised:
+        writer.verify(
+            "draft-media",
+            0,
+            "示例标题",
+            "".join(f'<img src="{url}" />' for url in expected_images),
+            expected_images,
+        )
+
+    assert raised.value.details["verification"]["image_order_matches"] is False
+
+
 def test_update_refuses_stale_snapshot_before_uploading(tmp_path: Path) -> None:
     paths: list[str] = []
 

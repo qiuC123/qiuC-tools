@@ -189,7 +189,7 @@ class OfficialDraftWriter:
         result = DraftVerification(
             title_matches=article.get("title") == title,
             body_text_matches=_html_text(actual_content) == _html_text(content),
-            image_order_matches=actual_images == image_urls,
+            image_order_matches=_image_sequences_match(actual_images, image_urls),
             expected_image_count=len(image_urls),
             actual_image_count=len(actual_images),
             verified=False,
@@ -577,6 +577,44 @@ def _html_images(value: str) -> list[str]:
         if isinstance(source, str):
             images.append(source)
     return images
+
+
+def _image_sequences_match(actual: list[str], expected: list[str]) -> bool:
+    return len(actual) == len(expected) and all(
+        _image_url_matches(actual_url, expected_url)
+        for actual_url, expected_url in zip(actual, expected, strict=True)
+    )
+
+
+def _image_url_matches(actual: str, expected: str) -> bool:
+    if actual == expected:
+        return True
+    try:
+        actual_url = urlsplit(actual)
+        expected_url = urlsplit(expected)
+        actual_port = actual_url.port
+        expected_port = expected_url.port
+    except ValueError:
+        return False
+    if not all(
+        parsed.scheme.casefold() in {"http", "https"}
+        and parsed.hostname == "mmbiz.qpic.cn"
+        and parsed.username is None
+        and parsed.password is None
+        for parsed in (actual_url, expected_url)
+    ):
+        return False
+    if actual_port is not None or expected_port is not None:
+        return False
+    actual_path = actual_url.path.rstrip("/").split("/")
+    expected_path = expected_url.path.rstrip("/").split("/")
+    return (
+        len(actual_path) >= 3
+        and len(expected_path) >= 3
+        and actual_path[-1].isdecimal()
+        and expected_path[-1].isdecimal()
+        and actual_path[:-1] == expected_path[:-1]
+    )
 
 
 def _lock_is_stale(path: Path) -> bool:
