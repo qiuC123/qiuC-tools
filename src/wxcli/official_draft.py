@@ -163,7 +163,7 @@ class OfficialDraftWriter:
         return DraftSnapshot(
             media_id=media_id,
             news_items=news_items,
-            fingerprint=_json_sha256(news_items),
+            fingerprint=_draft_fingerprint(news_items),
         )
 
     def verify(
@@ -558,6 +558,14 @@ def _json_sha256(value: object) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _draft_fingerprint(news_items: list[dict[str, Any]]) -> str:
+    stable_items = [
+        {key: value for key, value in item.items() if key != "url"}
+        for item in news_items
+    ]
+    return _json_sha256(stable_items)
 
 
 def _short_hash(value: str) -> str:

@@ -330,6 +330,63 @@ def test_update_refuses_stale_snapshot_before_uploading(tmp_path: Path) -> None:
     assert paths == ["/cgi-bin/draft/get"]
 
 
+def test_snapshot_fingerprint_ignores_rotating_preview_url() -> None:
+    calls = 0
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "news_item": [{
+                    "title": "未改变",
+                    "content": "<p>正文</p>",
+                    "url": f"https://mp.weixin.qq.com/s/temporary-{calls}",
+                }]
+            },
+        )
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+    )
+
+    first = writer.snapshot("draft-media")
+    second = writer.snapshot("draft-media")
+
+    assert first.news_items[0]["url"] != second.news_items[0]["url"]
+    assert first.fingerprint == second.fingerprint
+
+
+def test_snapshot_fingerprint_still_detects_editable_content_change() -> None:
+    calls = 0
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "news_item": [{
+                    "title": "未改变",
+                    "content": f"<p>正文版本 {calls}</p>",
+                    "url": "https://mp.weixin.qq.com/s/temporary",
+                }]
+            },
+        )
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+    )
+
+    first = writer.snapshot("draft-media")
+    second = writer.snapshot("draft-media")
+
+    assert first.fingerprint != second.fingerprint
+
+
 def test_update_rechecks_then_uploads_updates_and_verifies(tmp_path: Path) -> None:
     draft = _prepared_draft(tmp_path)
     requests: list[httpx.Request] = []
