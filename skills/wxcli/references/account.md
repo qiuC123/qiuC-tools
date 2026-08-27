@@ -64,4 +64,30 @@ wxcli --json account draft import-word ".\正文.docx" --cover ".\封面.png" --
 ```
 
 此命令只新建一个未发布草稿，不发布、不群发，也不修改已有草稿。正文图片上传
-无法回滚；若最后的新建草稿请求失败，应向用户说明错误结果中的已上传图片数量。
+无法回滚；上传检查点会按 SHA-256 去重并支持重试。新建完成后必须通过正文与图片
+回查验证。
+
+## 安全修改已有草稿
+
+先做独立备份（已有文件不会被覆盖）：
+
+```powershell
+wxcli --json account draft backup "MEDIA_ID" --output ".\backup.json"
+```
+
+再生成只读差异与冻结计划；此命令不上传、不修改微信：
+
+```powershell
+wxcli --json account draft diff "MEDIA_ID" ".\正文.docx" --cover ".\封面.png" --index 0 --output ".\更新计划"
+```
+
+把 `backup.json`、`plan.json` 和 `prepared\preview.html` 交给用户检查。只有用户在
+计划生成后明确授权应用这个计划，才能执行：
+
+```powershell
+wxcli --json account draft update ".\更新计划" --confirm
+```
+
+不得把 `--confirm` 合并到首次生成计划的动作中。执行时 wxcli 会重新获取远端草稿，
+指纹变化时拒绝覆盖；本地准备包被改动也会拒绝。更新后必须回查正文和图片。该流程
+仍不允许发布、群发、删除或修改计划之外的文章索引。

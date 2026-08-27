@@ -29,7 +29,7 @@ def _prepared_draft(tmp_path: Path, image_count: int = 1) -> PreparedDraft:
     placeholders: list[str] = []
     for index in range(1, image_count + 1):
         path = tmp_path / f"body-{index}.jpg"
-        path.write_bytes(b"body-image")
+        path.write_bytes(f"body-image-{index}".encode())
         images.append(PreparedImage(path, 10, 10, 100, 100))
         placeholders.append(f'<img src="wxcli-image-{index:03d}" />')
     cover = tmp_path / "cover.jpg"
@@ -70,6 +70,18 @@ def test_writer_uploads_body_then_cover_and_only_creates_draft(tmp_path: Path) -
             return httpx.Response(200, json={"media_id": "cover-media", "url": "cover-url"})
         if request.url.path == "/cgi-bin/draft/add":
             return httpx.Response(200, json={"media_id": "draft-media"})
+        if request.url.path == "/cgi-bin/draft/get":
+            return httpx.Response(
+                200,
+                json={
+                    "news_item": [
+                        {
+                            "title": "示例标题",
+                            "content": '<img src="https://mmbiz.qpic.cn/body/0" />',
+                        }
+                    ]
+                },
+            )
         pytest.fail(f"unexpected endpoint: {request.url.path}")
 
     client = httpx.Client(transport=httpx.MockTransport(respond))
@@ -78,10 +90,12 @@ def test_writer_uploads_body_then_cover_and_only_creates_draft(tmp_path: Path) -
     assert result.media_id == "draft-media"
     assert result.draft_created is True
     assert result.published is False
+    assert result.verification.verified is True
     assert [request.url.path for request in requests] == [
         "/cgi-bin/media/uploadimg",
         "/cgi-bin/material/add_material",
         "/cgi-bin/draft/add",
+        "/cgi-bin/draft/get",
     ]
     assert requests[1].url.params["type"] == "thumb"
     draft_body = json.loads(requests[2].content)
@@ -107,11 +121,10 @@ def test_partial_upload_count_is_reported_without_server_text(tmp_path: Path) ->
     with pytest.raises(ValidationError) as raised:
         OfficialDraftWriter(client, RetryTokens()).create(_prepared_draft(tmp_path, image_count=2))
 
-    assert raised.value.details == {
-        "errcode": 40009,
-        "uploaded_body_images": 1,
-        "cover_uploaded": False,
-    }
+    assert raised.value.details["errcode"] == 40009
+    assert raised.value.details["uploaded_body_images"] == 1
+    assert raised.value.details["cover_uploaded"] is False
+    assert "checkpoint" in raised.value.details
     assert "server text" not in raised.value.message
 
 
@@ -129,9 +142,233 @@ def test_failure_after_cover_reports_that_nonrollbackable_upload(tmp_path: Path)
         OfficialDraftWriter(client, RetryTokens()).create(_prepared_draft(tmp_path))
 
     error = raised.value
-    assert getattr(error, "details") == {
-        "errcode": 48001,
-        "uploaded_body_images": 1,
-        "cover_uploaded": True,
-    }
+    assert error.details["errcode"] == 48001
+    assert error.details["uploaded_body_images"] == 1
+    assert error.details["cover_uploaded"] is True
+    assert "checkpoint" in error.details
     assert "api unauthorized" not in str(error)
+
+
+def test_duplicate_images_resume_from_checkpoint_without_reupload(tmp_path: Path) -> None:
+    draft = _prepared_draft(tmp_path, image_count=2)
+    draft.images[1].path.write_bytes(draft.images[0].path.read_bytes())
+    checkpoint_dir = tmp_path / "checkpoints"
+    phase = 1
+    paths: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal phase
+        paths.append(request.url.path)
+        if request.url.path == "/cgi-bin/media/uploadimg":
+            return httpx.Response(200, json={"url": "https://mmbiz.qpic.cn/shared/0"})
+        if request.url.path == "/cgi-bin/material/add_material" and phase == 1:
+            phase = 2
+            return httpx.Response(200, json={"errcode": 40009})
+        if request.url.path == "/cgi-bin/material/add_material":
+            return httpx.Response(200, json={"media_id": "cover-media"})
+        if request.url.path == "/cgi-bin/draft/add":
+            return httpx.Response(200, json={"media_id": "draft-media"})
+        if request.url.path == "/cgi-bin/draft/get":
+            return httpx.Response(
+                200,
+                json={
+                    "news_item": [{
+                        "title": "示例标题",
+                        "content": (
+                            '<img src="https://mmbiz.qpic.cn/shared/0" />'
+                            '<img src="https://mmbiz.qpic.cn/shared/0" />'
+                        ),
+                    }]
+                },
+            )
+        pytest.fail(request.url.path)
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+        checkpoint_dir,
+    )
+    with pytest.raises(ValidationError):
+        writer.create(draft)
+    result = writer.create(draft)
+
+    assert paths.count("/cgi-bin/media/uploadimg") == 1
+    assert result.uploaded_image_count == 0
+    assert result.reused_image_count == 2
+    checkpoint = next(checkpoint_dir.glob("*.json")).read_text(encoding="utf-8")
+    assert "cached-token" not in checkpoint
+
+
+def test_readback_mismatch_reports_created_media_id(tmp_path: Path) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/cgi-bin/media/uploadimg":
+            return httpx.Response(200, json={"url": "https://mmbiz.qpic.cn/body/0"})
+        if request.url.path == "/cgi-bin/material/add_material":
+            return httpx.Response(200, json={"media_id": "cover-media"})
+        if request.url.path == "/cgi-bin/draft/add":
+            return httpx.Response(200, json={"media_id": "draft-media"})
+        if request.url.path == "/cgi-bin/draft/get":
+            return httpx.Response(200, json={"news_item": [{"title": "被改写", "content": ""}]})
+        pytest.fail(request.url.path)
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+        tmp_path / "checkpoints",
+    )
+    with pytest.raises(WxcliError, match="readback verification") as raised:
+        writer.create(_prepared_draft(tmp_path))
+
+    assert raised.value.details["media_id"] == "draft-media"
+    assert raised.value.details["verification"]["verified"] is False
+
+
+def test_update_refuses_stale_snapshot_before_uploading(tmp_path: Path) -> None:
+    paths: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={"news_item": [{"title": "current", "content": "<p>changed</p>"}]},
+        )
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+        tmp_path / "checkpoints",
+    )
+    with pytest.raises(ValidationError, match="changed after"):
+        writer.update("draft-media", 0, _prepared_draft(tmp_path), "old-fingerprint")
+
+    assert paths == ["/cgi-bin/draft/get"]
+
+
+def test_update_rechecks_then_uploads_updates_and_verifies(tmp_path: Path) -> None:
+    draft = _prepared_draft(tmp_path)
+    requests: list[httpx.Request] = []
+    initial: dict[str, object] = {
+        "title": "old",
+        "content": "<p>old</p>",
+        "content_source_url": "https://example.com/source",
+        "need_open_comment": 1,
+        "only_fans_can_comment": 1,
+    }
+    update_sent = False
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal update_sent
+        requests.append(request)
+        if request.url.path == "/cgi-bin/draft/get" and not update_sent:
+            return httpx.Response(200, json={"news_item": [initial]})
+        if request.url.path == "/cgi-bin/media/uploadimg":
+            return httpx.Response(200, json={"url": "https://mmbiz.qpic.cn/body/0"})
+        if request.url.path == "/cgi-bin/material/add_material":
+            return httpx.Response(200, json={"media_id": "cover-media"})
+        if request.url.path == "/cgi-bin/draft/update":
+            update_sent = True
+            return httpx.Response(200, json={"errcode": 0, "errmsg": "ok"})
+        if request.url.path == "/cgi-bin/draft/get":
+            return httpx.Response(
+                200,
+                json={"news_item": [{
+                    "title": "示例标题",
+                    "content": '<img src="https://mmbiz.qpic.cn/body/0" />',
+                }]},
+            )
+        pytest.fail(request.url.path)
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+        tmp_path / "checkpoints",
+    )
+    expected = writer.snapshot("draft-media").fingerprint
+    requests.clear()
+    result = writer.update("draft-media", 0, draft, expected)
+
+    assert result.draft_created is False
+    assert result.verification.verified is True
+    assert [request.url.path for request in requests] == [
+        "/cgi-bin/draft/get",
+        "/cgi-bin/media/uploadimg",
+        "/cgi-bin/material/add_material",
+        "/cgi-bin/draft/get",
+        "/cgi-bin/draft/update",
+        "/cgi-bin/draft/get",
+    ]
+    update_body = json.loads(requests[4].content)
+    assert update_body["media_id"] == "draft-media"
+    assert update_body["index"] == 0
+    assert update_body["articles"]["title"] == "示例标题"
+    assert update_body["articles"]["content_source_url"] == "https://example.com/source"
+    assert update_body["articles"]["need_open_comment"] == 1
+
+
+def test_update_refuses_change_that_happens_during_upload(tmp_path: Path) -> None:
+    first = {"news_item": [{"title": "old", "content": "<p>old</p>"}]}
+    get_calls = 0
+    paths: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal get_calls
+        paths.append(request.url.path)
+        if request.url.path == "/cgi-bin/draft/get":
+            get_calls += 1
+            if get_calls <= 2:
+                return httpx.Response(200, json=first)
+            return httpx.Response(
+                200,
+                json={"news_item": [{"title": "someone changed it", "content": "<p>new</p>"}]},
+            )
+        if request.url.path == "/cgi-bin/media/uploadimg":
+            return httpx.Response(200, json={"url": "https://mmbiz.qpic.cn/body/0"})
+        if request.url.path == "/cgi-bin/material/add_material":
+            return httpx.Response(200, json={"media_id": "cover-media"})
+        pytest.fail(request.url.path)
+
+    writer = OfficialDraftWriter(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        RetryTokens(),
+        tmp_path / "checkpoints",
+    )
+    expected = writer.snapshot("draft-media").fingerprint
+    with pytest.raises(ValidationError, match="while prepared images"):
+        writer.update("draft-media", 0, _prepared_draft(tmp_path), expected)
+
+    assert "/cgi-bin/draft/update" not in paths
+
+
+def test_stale_checkpoint_lock_is_recovered(tmp_path: Path) -> None:
+    draft = _prepared_draft(tmp_path)
+    checkpoint_dir = tmp_path / "checkpoints"
+    writer = OfficialDraftWriter(
+        httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json=(
+                        {"url": "https://mmbiz.qpic.cn/body/0"}
+                        if request.url.path == "/cgi-bin/media/uploadimg"
+                        else {"media_id": "cover-media"}
+                        if request.url.path == "/cgi-bin/material/add_material"
+                        else {"media_id": "draft-media"}
+                        if request.url.path == "/cgi-bin/draft/add"
+                        else {"news_item": [{
+                            "title": "示例标题",
+                            "content": '<img src="https://mmbiz.qpic.cn/body/0" />',
+                        }]}
+                    ),
+                )
+            )
+        ),
+        RetryTokens(),
+        checkpoint_dir,
+    )
+    checkpoint = writer._checkpoint_path(draft)  # noqa: SLF001 - lock recovery contract
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.with_suffix(checkpoint.suffix + ".lock").write_text("crashed", encoding="ascii")
+
+    result = writer.create(draft)
+
+    assert result.verification.verified is True

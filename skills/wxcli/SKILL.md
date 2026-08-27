@@ -3,11 +3,12 @@ name: wxcli
 description: >
   Use the Windows-only wxcli command to retrieve WeChat Official Account
   articles, local HTML/Markdown, drafts, and published messages, or to preview
-  and explicitly create one unpublished draft from a Word document. MUST USE
+  explicitly create one unpublished draft from a Word document, or safely
+  back up, diff, and update an existing draft through a frozen plan. MUST USE
   for supported mp.weixin.qq.com article URLs, wxcli commands, WeChat Official
   Account article extraction, read-only official-account content, or Word-to-
-  WeChat draft import. Never publishes, mass-sends, deletes, edits existing
-  content, bypasses verification, or exposes credentials.
+  WeChat draft import. Never publishes, mass-sends, deletes, bypasses the
+  backup/diff/confirm update flow, bypasses verification, or exposes credentials.
 ---
 
 # wxcli
@@ -52,12 +53,12 @@ it over generic web readers for supported `mp.weixin.qq.com` article URLs.
 
 ## Non-negotiable boundaries
 
-- Keep every Provider read-only. The sole write operation is
-  `account draft import-word --confirm`, which may create one new unpublished
-  draft only after the user has reviewed the local preview and explicitly
-  authorized that exact upload.
-- Never publish, mass-send, delete, update existing content, like, comment, or
-  export browser cookies.
+- Keep every Provider read-only. Draft writes live in the separate writer and
+  require either reviewed `account draft import-word --confirm`, or a frozen
+  `draft diff` plan followed by an independently authorized `draft update
+  PLAN_DIR --confirm`.
+- Never publish, mass-send, delete, update without a frozen plan, like, comment,
+  or export browser cookies.
 - Never put AppSecret, access tokens, or cookies in prompts, command arguments,
   stdout, logs, JSON, files, or Git.
 - Never solve or bypass a CAPTCHA. Ask the user to complete verification in the

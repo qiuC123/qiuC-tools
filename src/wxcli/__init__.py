@@ -1,3 +1,3 @@
-"""wxcli: a Windows WeChat content CLI with tightly scoped draft creation."""
+"""wxcli: Windows WeChat content access and explicitly planned draft changes."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

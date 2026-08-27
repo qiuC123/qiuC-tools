@@ -17,6 +17,8 @@ from wxcli.cache import ArticleCache
 from wxcli.browser import BrowserProfile
 from wxcli.doctor import Doctor
 from wxcli.draft_import import WordDraftImporter
+from wxcli.draft_import import PreparedDraft
+from wxcli.draft_update import DraftUpdatePlanner
 from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.official_draft import OfficialDraftWriter
@@ -38,7 +40,7 @@ cache_app = typer.Typer(help="Manage successful public-article cache entries.")
 browser_app = typer.Typer(help="Use the dedicated visible Chrome profile.")
 auth_app = typer.Typer(help="Configure and test Official Account read-only access.")
 account_app = typer.Typer(help="Read drafts and published Official Account messages.")
-draft_app = typer.Typer(help="Read drafts or explicitly create a new draft from Word.")
+draft_app = typer.Typer(help="Read, preview, back up, compare, or safely change drafts.")
 published_app = typer.Typer(help="Read published messages by article_id.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
@@ -315,14 +317,23 @@ def account_draft_import_word(
         return
 
     if output_dir is not None:
-        prepared = importer.prepare(path, cover, output_dir, author=author, digest=digest)
+        package = output_dir / "package.json"
+        prepared = (
+            PreparedDraft.load(output_dir)
+            if package.is_file()
+            else importer.prepare(path, cover, output_dir, author=author, digest=digest)
+        )
         output.diagnostic(
             f"Creating one unpublished draft: {prepared.title} "
             f"({len(prepared.images)} body images)."
         )
         with httpx.Client(timeout=60.0) as client:
             output.success(
-                OfficialDraftWriter(client, official_token_manager(client)).create(prepared)
+                OfficialDraftWriter(
+                    client,
+                    official_token_manager(client),
+                    default_runtime_root() / "upload-checkpoints",
+                ).create(prepared)
             )
         return
 
@@ -340,8 +351,86 @@ def account_draft_import_word(
         )
         with httpx.Client(timeout=60.0) as client:
             output.success(
-                OfficialDraftWriter(client, official_token_manager(client)).create(prepared)
+                OfficialDraftWriter(
+                    client,
+                    official_token_manager(client),
+                    default_runtime_root() / "upload-checkpoints",
+                ).create(prepared)
             )
+
+
+@draft_app.command("backup")
+def account_draft_backup(
+    context: typer.Context,
+    media_id: str = typer.Argument(..., help="Exact draft media_id."),
+    output_path: Path = typer.Option(..., "--output", help="New JSON backup file."),
+) -> None:
+    """Save an exact local draft snapshot without modifying WeChat."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        writer = OfficialDraftWriter(
+            client,
+            official_token_manager(client),
+            default_runtime_root() / "upload-checkpoints",
+        )
+        output.success(DraftUpdatePlanner(writer).backup(media_id, output_path))
+
+
+@draft_app.command("diff")
+def account_draft_diff(
+    context: typer.Context,
+    media_id: str = typer.Argument(..., help="Exact draft media_id."),
+    path: Path = typer.Argument(..., help="Replacement Word .docx article."),
+    cover: Path = typer.Option(..., "--cover", help="JPG or PNG cover image."),
+    output_dir: Path = typer.Option(..., "--output", help="Empty directory for the update plan."),
+    index: int = typer.Option(0, "--index", min=0, help="Zero-based article index."),
+    author: str | None = typer.Option(None, "--author"),
+    digest: str | None = typer.Option(None, "--digest"),
+) -> None:
+    """Back up and compare one draft article; performs no remote write."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    with httpx.Client(timeout=30.0) as client:
+        writer = OfficialDraftWriter(
+            client,
+            official_token_manager(client),
+            default_runtime_root() / "upload-checkpoints",
+        )
+        output.success(
+            DraftUpdatePlanner(writer).plan(
+                media_id,
+                index,
+                path,
+                cover,
+                output_dir,
+                author=author,
+                digest=digest,
+            )
+        )
+
+
+@draft_app.command("update")
+def account_draft_update(
+    context: typer.Context,
+    plan_dir: Path = typer.Argument(..., help="Existing directory produced by draft diff."),
+    confirm: bool = typer.Option(False, "--confirm", help="Apply this exact update plan."),
+) -> None:
+    """Apply one frozen update plan after rechecking the remote fingerprint."""
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    if not confirm:
+        raise InputError("Applying a draft update requires --confirm.")
+    with httpx.Client(timeout=60.0) as client:
+        writer = OfficialDraftWriter(
+            client,
+            official_token_manager(client),
+            default_runtime_root() / "upload-checkpoints",
+        )
+        output.success(DraftUpdatePlanner(writer).apply(plan_dir, confirmed=True))
 
 
 @published_app.command("list")
