@@ -102,6 +102,30 @@ def test_missing_required_article_nodes_is_parsing_error() -> None:
     assert raised.value.code == ErrorCode.PARSING_ERROR
 
 
+def test_empty_article_shell_is_parsing_error() -> None:
+    html = '<h1 id="activity-name">Campus hiring</h1><div id="js_content"></div>'
+
+    with pytest.raises(WxcliError) as raised:
+        PublicArticleParser.parse(html, "https://mp.weixin.qq.com/s/T", Provider.HTTP)
+
+    assert raised.value.code == ErrorCode.PARSING_ERROR
+    assert "no extractable content" in raised.value.message
+
+
+def test_image_only_article_is_still_extractable() -> None:
+    html = """
+      <h1 id="activity-name">Campus hiring poster</h1>
+      <div id="js_content"><img data-src="https://img.example.com/poster.jpg"></div>
+    """
+
+    document = PublicArticleParser.parse(
+        html, "https://mp.weixin.qq.com/s/T", Provider.HTTP
+    )
+
+    assert document.article.images == ["https://img.example.com/poster.jpg"]
+    assert "poster.jpg" in document.article.content_markdown
+
+
 @pytest.mark.parametrize(
     ("expected", "status"),
     [

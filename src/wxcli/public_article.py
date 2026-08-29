@@ -62,10 +62,16 @@ class PublicArticleParser:
         for image in content.select("img"):
             if data_src := image.get("data-src"):
                 image["src"] = str(data_src)
+        content_markdown = markdownify(str(content), heading_style="ATX").strip()
+        if not content_markdown and not images:
+            raise WxcliError(
+                ErrorCode.PARSING_ERROR,
+                "The article page contains no extractable content.",
+            )
 
         article = Article(
             title=title,
-            content_markdown=markdownify(str(content), heading_style="ATX").strip(),
+            content_markdown=content_markdown,
             source_url=HttpUrl(url),
             author=account_name,
             published_at=cls._published_at(soup),
