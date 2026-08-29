@@ -93,6 +93,8 @@ def test_wxcli_skill_contains_required_contracts() -> None:
 
     assert "TODO" not in skill
     assert "wxcli --json article get" in skill
+    assert "wxcli --json discovery search" in skill
+    assert "wxcli --json discovery hydrate" in skill
     assert "VERIFICATION_REQUIRED" in skill
     assert "explicitly authorizes browser mode" in skill
     assert "images[]" in skill
@@ -100,3 +102,5 @@ def test_wxcli_skill_contains_required_contracts() -> None:
     assert "未发布草稿" in references
     assert "AppSecret" in references
     assert "绕过验证" in references
+    assert "article_identity" in references
+    assert "不是微信官方或全量索引" in references

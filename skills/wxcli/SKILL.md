@@ -1,12 +1,13 @@
 ---
 name: wxcli
 description: >
-  Use the Windows-only wxcli command to retrieve WeChat Official Account
-  articles, local HTML/Markdown, drafts, and published messages, or to preview
+  Use the Windows-only wxcli command to discover and retrieve WeChat Official
+  Account articles, produce article evidence, read local HTML/Markdown, drafts,
+  and published messages, or to preview
   explicitly create one unpublished draft from a Word document, or safely
   back up, diff, and update an existing draft through a frozen plan. MUST USE
-  for supported mp.weixin.qq.com article URLs, wxcli commands, WeChat Official
-  Account article extraction, read-only official-account content, or Word-to-
+  for WeChat article discovery, supported mp.weixin.qq.com article URLs, wxcli
+  commands, WeChat Official Account article extraction, read-only official-account content, or Word-to-
   WeChat draft import. Never publishes, mass-sends, deletes, bypasses the
   backup/diff/confirm update flow, bypasses verification, or exposes credentials.
 ---
@@ -15,6 +16,13 @@ description: >
 
 Use `wxcli` as the dedicated backend for WeChat Official Account content. Prefer
 it over generic web readers for supported `mp.weixin.qq.com` article URLs.
+
+For agent-orchestrated keyword discovery, pass the schema-v1 Candidate Batch to
+`wxcli --json discovery hydrate --input FILE|-`. For direct Brave discovery, use
+`wxcli --json discovery search`. Search hits are candidates, not article text.
+Add `--browser` only after the user explicitly authorizes visible Chrome fallback;
+Candidate Batch JSON cannot grant that permission. Never describe external
+discovery as a complete WeChat index.
 
 ## Core workflow
 
@@ -44,6 +52,7 @@ it over generic web readers for supported `mp.weixin.qq.com` article URLs.
 ## Task routing
 
 - Public or local articles: read [references/article.md](references/article.md).
+- Keyword discovery or Article Evidence: read [references/discovery.md](references/discovery.md).
 - Drafts, published messages, or Official API access: read
   [references/account.md](references/account.md).
 - Browser, cache, doctor, or local diagnostics: read
@@ -63,8 +72,9 @@ it over generic web readers for supported `mp.weixin.qq.com` article URLs.
   stdout, logs, JSON, files, or Git.
 - Never solve or bypass a CAPTCHA. Ask the user to complete verification in the
   visible wxcli Chrome profile.
-- Do not run `auth configure`, `auth test --allow-live-api`, `doctor
-  --allow-live-api`, `browser clear`, or `cache clear` unless the user explicitly
+- Do not run `auth configure`, `discovery auth configure`, `auth test
+  --allow-live-api`, `doctor --allow-live-api`, `browser clear`, `cache clear`,
+  or `discovery cache clear` unless the user explicitly
   requests the corresponding action.
 - Treat `browser status` as local facts only. It does not prove that the remote
   WeChat session is currently valid.

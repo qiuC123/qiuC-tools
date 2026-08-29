@@ -6,6 +6,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw 'The release build requires PowerShell 7 or newer. Run it with pwsh.'
+}
+
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $buildRoot = Join-Path $projectRoot 'build\release'
 $distRoot = Join-Path $projectRoot 'dist\release'
@@ -142,7 +146,7 @@ if (-not $jsonVersion.ok -or $jsonVersion.data.version -ne $version) {
     throw 'Packaged wxcli JSON version smoke test failed.'
 }
 $help = Invoke-PackagedWxcli @('--help')
-foreach ($command in @('article', 'account', 'auth', 'browser', 'cache', 'doctor')) {
+foreach ($command in @('article', 'account', 'auth', 'browser', 'cache', 'discovery', 'doctor')) {
     if ($help.Stdout -notmatch "\b$command\b") {
         throw "Packaged wxcli help is missing command: $command"
     }
@@ -164,6 +168,18 @@ if ($invalidInput.ok -or $invalidInput.error.code -ne 'INVALID_ARGUMENT') {
 $authStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'auth', 'status'))
 if (-not $authStatus.ok) {
     throw 'Packaged wxcli keyring smoke test failed.'
+}
+$discoveryHelp = Invoke-PackagedWxcli @('discovery', '--help')
+foreach ($command in @('search', 'hydrate', 'auth', 'cache')) {
+    if ($discoveryHelp.Stdout -notmatch "\b$command\b") {
+        throw "Packaged wxcli discovery help is missing command: $command"
+    }
+}
+$discoveryAuthStatus = ConvertFrom-SingleJson (
+    Invoke-PackagedWxcli @('--json', 'discovery', 'auth', 'status', '--provider', 'brave')
+)
+if (-not $discoveryAuthStatus.ok) {
+    throw 'Packaged wxcli discovery keyring status smoke test failed.'
 }
 $browserStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'browser', 'status'))
 if (-not $browserStatus.ok) {

@@ -1,6 +1,6 @@
 # wxcli
 
-`wxcli` 是一个仅支持 Windows 的微信公众号命令行工具。它可以读取公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文，也可以把 Word 正文和单独的封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
+`wxcli` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再回读微信原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
 
 ## 环境与开发安装
 
@@ -30,6 +30,31 @@ wxcli article local .\article.md
 # 读取支持的微信公众号公开文章；成功结果缓存 1 小时
 wxcli article get "https://mp.weixin.qq.com/s/example"
 wxcli article get "https://mp.weixin.qq.com/s/example" --no-cache
+
+# 对一篇真实微信原文生成身份、外链和稳定哈希证据
+wxcli --json article evidence "https://mp.weixin.qq.com/s/example"
+
+# 首次使用发现功能时，交互式把 Brave API Key 存入 Windows 凭据管理器
+wxcli discovery auth configure --provider brave
+wxcli --json discovery auth status --provider brave
+
+# 只发现候选，不访问候选微信页面
+wxcli --json discovery search "2027 校园招聘" --company "示例公司" --account "示例招聘"
+
+# 显式回读分级选中的候选；只有再加 --browser 才允许验证页走可见 Chrome
+wxcli --json discovery search "2027 校园招聘" --hydrate
+wxcli --json discovery search "2027 校园招聘" --hydrate --browser
+
+# 版本化 JSON 可来自文件或标准输入；二者都不能携带 API Key
+wxcli --json discovery search --input .\request.json
+Get-Content .\request.json | wxcli --json discovery search --input -
+
+# Agent Reach/Exa 只负责生成候选；wxcli 校验、去重并回读微信原文
+wxcli --json discovery hydrate --input .\candidates.json
+Get-Content .\candidates.json | wxcli --json discovery hydrate --input -
+
+# 只清理发现缓存、候选历史和 checkpoint 状态
+wxcli --json discovery cache clear
 
 # 只有显式指定 --browser 才会打开可见 Chrome
 wxcli article get "https://mp.weixin.qq.com/s/example" --browser
@@ -77,6 +102,20 @@ wxcli doctor --allow-live-api
 ```
 
 `browser status` 只报告本地专用 profile 是否存在，以及本地记录的 `last_verified_at`。它不会打开 Chrome，也不能据此断言当前微信会话仍然有效。
+
+## 微信文章发现与证据
+
+- Agent-first 路径由 Codex CLI 配合 Agent Reach/Exa 生成 Candidate Batch，再交给 `discovery hydrate`。wxcli 不读取 Exa 凭证，也不把 Agent 的判断当成证据。Candidate Batch 最多 100 条、2 MiB，未知字段一律拒绝。
+- Candidate Batch 不能授权浏览器。只有用户明确同意后，才能在本地命令追加 `--browser`；默认绝不启动 Chrome。
+- `discovery search` 使用 Brave Web Search，并强制加入 `site:mp.weixin.qq.com/s`。它是“微信公众号文章发现”，不是微信官方搜索，也不承诺全微信、全量或实时无延迟。
+- 搜索命中始终只是 Candidate。只有 `--hydrate` 成功读取真实微信原文后才会产生 Article Evidence；失败会保留为安全的 `hydration_attempt`，不会用搜索摘要伪造正文。
+- 默认最多返回 50 个候选。启用回读后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
+- `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at` 和 `last_verified_at` 含义不同。
+- `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
+- wxcli 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。二维码和 OCR 计划在 0.5.0，0.4.0 尚不提供。
+- 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
+
+完整 schema、部分成功语义和验收口径见 [文章发现说明](docs/article-discovery.md)。
 
 ## 支持的公开文章 URL
 
@@ -128,7 +167,7 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 - 所有 Provider 都是只读的；写操作只存在于独立草稿写入器中，并且必须是显式确认的新建，或经过冻结计划与远端指纹复核的草稿替换。
 - 不发布、不群发、不删除草稿或公众号内容，也不点赞或评论。
 - 不绕过验证码，不导出 Cookie，也不会把浏览器 Cookie 放入命令输出或缓存。
-- AppID 存在普通本地配置中；AppSecret 和 Access Token 存在 Windows 凭据管理器中；状态文件只记录 Token 到期时间。
+- AppID 存在普通本地配置中；AppSecret、Access Token 和 discovery 专用 Brave API Key 存在 Windows 凭据管理器中。发现状态库不保存凭证或认证头。
 - 不要把 AppSecret、Token 或 Cookie 放在命令参数、日志、问题报告或 Git 文件中。
 - `auth test` 不会强制刷新尚未过期的 Token。
 - `doctor` 和 `auth test` 只有收到 `--allow-live-api` 明确授权后，才会执行真实微信网络/账号检查。
@@ -156,8 +195,8 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 
 ```powershell
 .\scripts\build-release.ps1
-.\dist\release\wxcli-0.3.0-windows-x64\wxcli.exe --version
-Get-FileHash .\dist\release\wxcli-0.3.0-windows-x64.zip -Algorithm SHA256
+.\dist\release\wxcli-0.4.0-windows-x64\wxcli.exe --version
+Get-FileHash .\dist\release\wxcli-0.4.0-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。本项目不会自动上传 GitHub、PyPI 或创建外部 Release。

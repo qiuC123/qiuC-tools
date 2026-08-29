@@ -5,6 +5,7 @@ __pycache__/
 .mypy_cache/
 build/
 dist/
+wx_upload_preview_*/
 *.egg-info/
 
 # Runtime state: credentials and browser data must never enter Git.
