@@ -200,3 +200,11 @@ Get-FileHash .\dist\release\wxcli-0.4.0-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。本项目不会自动上传 GitHub、PyPI 或创建外部 Release。
+
+构建后的版本通过稳定目录安装，用户 PATH 永远指向 `%LOCALAPPDATA%\Programs\wxcli\current`：
+
+```powershell
+pwsh .\scripts\install-release.ps1
+```
+
+安装脚本会在临时目录完成离线冒烟测试，再原子切换 `current`/`previous`；使用 `pwsh .\scripts\install-release.ps1 -Rollback` 可以双向交换当前版和上一版。

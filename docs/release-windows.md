@@ -1,4 +1,4 @@
-# wxcli Windows x64 安装与清理
+# wxcli Windows x64 安装、升级与清理
 
 ## 安装
 
@@ -11,27 +11,29 @@
 
    两处 SHA-256 应完全相同。
 
-2. 解压整个 ZIP。`wxcli.exe` 必须和 `_internal` 目录保持在一起，不能只复制 EXE。
-3. 在解压目录中运行：
+2. 解压整个 ZIP。`wxcli.exe` 必须和 `_internal` 目录保持在一起，不能只复制 EXE。维护者从仓库构建时，解压后的完整目录位于 `dist\release\wxcli-<版本>-windows-x64`。
+3. 在仓库根目录运行安装脚本：
 
    ```powershell
-   .\wxcli-0.4.0-windows-x64\wxcli.exe --version
-   .\wxcli-0.4.0-windows-x64\wxcli.exe doctor
+   pwsh .\scripts\install-release.ps1 -Version 0.4.0
    ```
 
-4. 如需在当前 PowerShell 窗口直接输入 `wxcli`，可临时加入 PATH：
+   脚本先把完整产物复制到临时目录并完成离线冒烟测试，然后通过同一 NTFS 卷内的目录改名切换版本。安装位置固定为：
 
-   ```powershell
-   $env:Path = "$(Resolve-Path .\wxcli-0.4.0-windows-x64);$env:Path"
-   wxcli --help
+   ```text
+   %LOCALAPPDATA%\Programs\wxcli\current
    ```
+
+4. 安装脚本会把 `current` prepend 到用户级 PATH；PATH 只需配置一次，以后升级和回滚都不需要修改。请新开一个终端，再运行 `wxcli --version`。旧的 wxcli PATH 条目只会产生警告，脚本不会自动删除，请在确认新版本可用后人工清理。
+5. 默认还会把仓库中的 `skills\wxcli` 同步到 `%USERPROFILE%\.agents\skills\wxcli`，并在固定安装根目录中保存按版本编号的 Skill 快照。测试或多版本并存时可以显式使用 `-SkipPath` 或 `-SkipSkill`。
 
 本程序不需要 Python，但可见浏览器功能需要安装在默认路径的 Google Chrome。首次使用官方接口时运行 `wxcli auth configure`；首次使用文章发现时运行 `wxcli discovery auth configure --provider brave`。两类密钥分别进入 Windows 凭据管理器。
 
-人工真实测试应明确选择刚安装的 0.4.0 可执行文件，避免误用 PATH 中的旧版本：
+人工真实测试应明确选择稳定安装目录中的可执行文件，避免当前终端继续使用 PATH 中的旧版本：
 
 ```powershell
-.\scripts\live-discovery-smoke.ps1 -Query '校园招聘' -WxcliPath '.\wxcli-0.4.0-windows-x64\wxcli.exe' -AllowLiveSearch
+$wxcliExe = Join-Path $env:LOCALAPPDATA 'Programs\wxcli\current\wxcli.exe'
+.\scripts\live-discovery-smoke.ps1 -Query '校园招聘' -WxcliPath $wxcliExe -AllowLiveSearch
 ```
 
 加入 `-AllowLiveWeChat` 才会回读微信原文；再加入 `-AllowBrowser` 才可能打开可见 Chrome。
@@ -44,7 +46,7 @@ Agent-first 的人工测试另用 Codex CLI 和 Agent Reach/Exa，三个权限�
 
 # 再授权 wxcli 回读微信原文；只有额外加 -AllowBrowser 才可能打开 Chrome
 .\scripts\live-agent-discovery-smoke.ps1 -Query '校园招聘' -CodexPath 'codex' `
-  -WxcliPath '.\wxcli-0.4.0-windows-x64\wxcli.exe' `
+  -WxcliPath $wxcliExe `
   -AllowLiveAgentSearch -AllowLiveWeChat
 ```
 
@@ -52,7 +54,26 @@ Agent-first 的人工测试另用 Codex CLI 和 Agent Reach/Exa，三个权限�
 
 ## 升级
 
-把新 ZIP 解压到一个新目录并使用其中的 `wxcli.exe`。运行状态保存在 `%LOCALAPPDATA%\wxcli`，不会因为替换程序目录而丢失。
+把新版本的完整产物放入 `dist\release\wxcli-<版本>-windows-x64`，然后运行：
+
+```powershell
+# 默认读取 pyproject.toml 中的版本
+pwsh .\scripts\install-release.ps1
+```
+
+脚本在 `current.new` 完成复制和离线冒烟测试。通过后，原 `current` 政名为 `previous`，`current.new` 再改名为 `current`；任何时候都不在服役目录中原地覆盖文件。如果最后一次改名失败，脚本会把 `previous` 自动恢复为 `current`。
+
+只保留一个 `previous`：再次安装新版本时，原有 `previous` 会先删除，当前服役版本成为新的 `previous`。运行状态仍保存在 `%LOCALAPPDATA%\wxcli`，不会因为程序目录切换而丢失。
+
+## 回滚
+
+先关闭正在运行的 wxcli，再执行：
+
+```powershell
+pwsh .\scripts\install-release.ps1 -Rollback
+```
+
+脚本通过三次目录改名交换 `current` 和 `previous`，再对新的 `current` 运行离线冒烟测试；测试失败会自动反向交换。再次执行同一命令可以滚回升级后的版本。若存在对应版本的 Skill 快照，回滚时会同时恢复用户级 Skill；快照缺失只会警告，不会阻断程序回滚。
 
 ## 清理与卸载
 
@@ -60,16 +81,16 @@ Agent-first 的人工测试另用 Codex CLI 和 Agent Reach/Exa，三个权限�
 
 ```powershell
 # 删除公共文章缓存
-.\wxcli.exe cache clear
+wxcli cache clear
 
 # 删除 discovery 搜索缓存、候选历史和 checkpoint 状态；不删除 Brave 凭据
-.\wxcli.exe discovery cache clear
+wxcli discovery cache clear
 
 # 删除 wxcli 专用 Chrome profile 和本地浏览器状态
-.\wxcli.exe browser clear
+wxcli browser clear
 ```
 
-随后可以删除解压出的 `wxcli-0.4.0-windows-x64` 目录。程序没有安装系统服务，也不会创建外部 Release。
+随后可以删除 `%LOCALAPPDATA%\Programs\wxcli`，并从用户级 PATH 人工删除 `%LOCALAPPDATA%\Programs\wxcli\current`。如不再需要 Agent Skill，也可以删除 `%USERPROFILE%\.agents\skills\wxcli`。程序没有安装系统服务，也不会创建外部 Release。
 
 如果还要彻底删除账号配置：
 
