@@ -17,10 +17,19 @@ _SENSITIVE_KEYS = {
     "cookie",
     "cookies",
     "authorization",
+    "api_key",
+    "apikey",
+    "x-api-key",
+    "x-subscription-token",
 }
 _TEXT_SECRET = re.compile(
-    r"(?i)\b(appsecret|app_secret|access_token|token|cookie|authorization)\b"
+    r"(?i)\b(appsecret|app_secret|access_token|token|cookie|authorization|"
+    r"api_key|apikey|x-api-key|x-subscription-token)\b"
     r"(\s*[:=]\s*)([^\r\n]*)"
+)
+_CREDENTIAL_ASSIGNMENT = re.compile(
+    r"(?i)\b(appsecret|app_secret|access_token|cookie|authorization|"
+    r"api_key|apikey|x-api-key|x-subscription-token)\b\s*[:=]"
 )
 
 
@@ -43,3 +52,8 @@ def redact(value: Any) -> Any:
 def redact_text(message: str) -> str:
     """Remove assignment-like credential values from diagnostic text."""
     return _TEXT_SECRET.sub(lambda match: f"{match.group(1)}{match.group(2)}{_REDACTED}", message)
+
+
+def contains_credential_assignment(value: str) -> bool:
+    """Detect credential-shaped text before untrusted metadata can be persisted."""
+    return _CREDENTIAL_ASSIGNMENT.search(value) is not None

@@ -12,7 +12,8 @@ from wxcli.browser import BrowserProfile, ProfileLock
 from wxcli.cache import ArticleCache
 from wxcli.errors import ErrorCode, NotFoundError, VerificationRequiredError, WxcliError
 from wxcli.models import Article, Provider
-from wxcli.providers.http import PageKind, PublicHttpProvider, WeChatPageClassifier
+from wxcli.providers.http import PageKind, WeChatPageClassifier
+from wxcli.public_article import PublicArticleDocument, PublicArticleParser
 from wxcli.public_url import validate_public_url
 
 CHROME_PATH = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
@@ -40,6 +41,11 @@ class ChromeProvider:
         if self.cache and not no_cache:
             if article := self.cache.get(normalized_url):
                 return article
+        return self.get_document(normalized_url, no_cache=no_cache).article
+
+    def get_document(self, url: str, *, no_cache: bool = False) -> PublicArticleDocument:
+        """Open a fresh visible page document for explicitly authorized evidence."""
+        normalized_url = validate_public_url(url)
         html = self._open(normalized_url)
         kind = self.classifier.classify(html)
         if kind is PageKind.VERIFICATION:
@@ -48,11 +54,10 @@ class ChromeProvider:
             raise NotFoundError("The public article was not found.")
         if kind is PageKind.ERROR:
             raise WxcliError(ErrorCode.PARSING_ERROR, "The WeChat page is not a readable article.")
-        article = PublicHttpProvider._parse(html, normalized_url)
-        article = article.model_copy(update={"provider": Provider.CHROME})
+        document = PublicArticleParser.parse(html, normalized_url, Provider.CHROME)
         if self.cache and not no_cache:
-            self.cache.put(normalized_url, article)
-        return article
+            self.cache.put(normalized_url, document.article)
+        return document
 
     def open_login(self) -> None:
         """Open a visible login page for up to five minutes; no cookie is exported."""

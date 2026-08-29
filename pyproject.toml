@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wxcli"
-version = "0.3.0"
-description = "Windows CLI for reading WeChat content and safely planning draft changes"
+version = "0.4.0"
+description = "Windows CLI for discovering and reading WeChat content and safely planning draft changes"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
@@ -27,6 +27,7 @@ dependencies = [
 dev = [
     "mypy>=1.10,<2.0",
     "pytest>=8.2,<9.0",
+    "pytest-cov>=5,<7",
     "pyinstaller>=6.7,<7.0",
 ]
 

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import sys
 import os
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import httpx
 import typer
-from typer._click.exceptions import Exit, UsageError
+from pydantic import ValidationError as PydanticValidationError
+from typer import Exit
+from typer._click.exceptions import UsageError
 
 from wxcli import __version__
 from wxcli.auth import AccessTokenStore, AppIdStore, SecretStore, TokenManager, default_backend
@@ -19,7 +22,18 @@ from wxcli.doctor import Doctor
 from wxcli.draft_import import WordDraftImporter
 from wxcli.draft_import import PreparedDraft
 from wxcli.draft_update import DraftUpdatePlanner
-from wxcli.errors import ErrorCode, ExitCode, InputError, WxcliError
+from wxcli.errors import ErrorCode, ExitCode, InputError, ValidationError, WxcliError
+from wxcli.evidence import EvidenceService
+from wxcli.discovery.auth import DiscoverySecretStore
+from wxcli.discovery.brave import BraveDiscoveryProvider
+from wxcli.discovery.ingestion import CandidateIngestionService
+from wxcli.discovery.models import (
+    MAX_CANDIDATE_BATCH_BYTES,
+    CandidateBatchRequest,
+    DiscoveryRequest,
+)
+from wxcli.discovery.service import DiscoveryService, validate_discovery_tokens
+from wxcli.discovery.store import DiscoveryStore
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.official_draft import OfficialDraftWriter
 from wxcli.output import Output, configure_utf8_streams, is_interactive
@@ -31,7 +45,7 @@ from wxcli.providers.chrome import CHROME_PATH
 
 app = typer.Typer(
     name="wxcli",
-    help="Windows WeChat CLI for content reading and explicitly confirmed draft creation.",
+    help="Windows WeChat CLI: explicitly confirmed draft changes and read-only discovery.",
     no_args_is_help=False,
     add_completion=False,
 )
@@ -42,13 +56,19 @@ auth_app = typer.Typer(help="Configure and test Official Account read-only acces
 account_app = typer.Typer(help="Read drafts and published Official Account messages.")
 draft_app = typer.Typer(help="Read, preview, back up, compare, or safely change drafts.")
 published_app = typer.Typer(help="Read published messages by article_id.")
+discovery_app = typer.Typer(help="Discover public WeChat articles through external search.")
+discovery_auth_app = typer.Typer(help="Configure discovery-provider credentials.")
+discovery_cache_app = typer.Typer(help="Manage discovery search state only.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
 app.add_typer(browser_app, name="browser")
 app.add_typer(auth_app, name="auth")
 app.add_typer(account_app, name="account")
+app.add_typer(discovery_app, name="discovery")
 account_app.add_typer(draft_app, name="draft")
 account_app.add_typer(published_app, name="published")
+discovery_app.add_typer(discovery_auth_app, name="auth")
+discovery_app.add_typer(discovery_cache_app, name="cache")
 
 
 def default_cache() -> ArticleCache:
@@ -66,6 +86,16 @@ def default_browser_profile() -> BrowserProfile:
 def default_runtime_root() -> Path:
     """Return the per-user directory for non-secret config and state."""
     return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "wxcli"
+
+
+def default_discovery_store() -> DiscoveryStore:
+    """Return the discovery-only cache, history, and checkpoint state."""
+    return DiscoveryStore(default_runtime_root() / "discovery" / "state.sqlite3")
+
+
+def default_discovery_secrets() -> DiscoverySecretStore:
+    """Return the discovery-specific Windows credential store facade."""
+    return DiscoverySecretStore(default_backend())
 
 
 def default_auth_stores() -> tuple[AppIdStore, SecretStore, AccessTokenStore]:
@@ -120,7 +150,7 @@ def root(
         help="Show the wxcli version and exit.",
     ),
 ) -> None:
-    """Read WeChat content or explicitly create a new, unpublished draft."""
+    """Discover or read WeChat content, or explicitly create an unpublished draft."""
     output = Output(json_mode=json_mode)
     context.obj = output
     if version:
@@ -165,6 +195,176 @@ def article_from_public_url(
         return
     with httpx.Client(timeout=30.0) as client:
         output.success(PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache))
+
+
+@article_app.command("evidence")
+def article_evidence(
+    context: typer.Context,
+    url: str = typer.Argument(..., help="Supported public WeChat article URL."),
+    browser: bool = typer.Option(False, "--browser", help="Use visible Chrome for this request."),
+) -> None:
+    """Read one real WeChat page and return versioned article evidence."""
+    output = _output(context)
+    if browser:
+        chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
+        output.success(EvidenceService(chrome_provider).get(url))
+        return
+    with httpx.Client(timeout=30.0) as client:
+        http_provider = PublicHttpProvider(client, default_cache())
+        output.success(EvidenceService(http_provider).get(url))
+
+
+@discovery_app.command("search")
+def discovery_search(
+    context: typer.Context,
+    query: str | None = typer.Argument(None, help="Keywords used to discover WeChat articles."),
+    input_path: str | None = typer.Option(None, "--input", help="Schema-v1 JSON file, or - for stdin."),
+    company: list[str] | None = typer.Option(None, "--company", help="Repeatable company-name hint."),
+    account: list[str] | None = typer.Option(None, "--account", help="Repeatable account-name hint."),
+    published_after: str | None = typer.Option(None, "--published-after", help="Earliest YYYY-MM-DD."),
+    published_before: str | None = typer.Option(None, "--published-before", help="Latest YYYY-MM-DD."),
+    limit: int = typer.Option(50, "--limit", min=1, max=50),
+    cursor: str | None = typer.Option(None, "--cursor", help="Opaque next-page cursor."),
+    checkpoint: str | None = typer.Option(None, "--checkpoint", help="Opaque incremental checkpoint."),
+    new_only: bool = typer.Option(False, "--new-only", help="Return only newly observed candidates."),
+    hydrate: bool = typer.Option(False, "--hydrate", help="Read selected WeChat source pages."),
+    priority_hydrate: int = typer.Option(10, "--priority-hydrate", min=0, max=20),
+    max_hydrate: int = typer.Option(20, "--max-hydrate", min=0, max=20),
+    require_account_match: bool = typer.Option(False, "--require-account-match"),
+    require_published_date: bool = typer.Option(False, "--require-published-date"),
+    browser: bool = typer.Option(False, "--browser", help="Allow serial Chrome fallback after verification."),
+) -> None:
+    """Discover candidates and optionally hydrate selected WeChat articles."""
+    output = _output(context)
+    if input_path is not None and _has_explicit_discovery_search_options(context):
+        raise InputError("--input cannot be combined with query or search options.")
+    request = _discovery_request(
+        query=query,
+        input_path=input_path,
+        companies=company or [],
+        accounts=account or [],
+        published_after=published_after,
+        published_before=published_before,
+        limit=limit,
+        cursor=cursor,
+        checkpoint=checkpoint,
+        new_only=new_only,
+        hydrate=hydrate,
+        priority_hydrate=priority_hydrate,
+        max_hydrate=max_hydrate,
+        require_account_match=require_account_match,
+        require_published_date=require_published_date,
+        allow_browser=browser,
+    )
+    validate_discovery_tokens(request)
+    api_key = default_discovery_secrets().get_brave_api_key()
+    if not api_key:
+        raise WxcliError(ErrorCode.AUTHENTICATION_ERROR, "The Brave API key is not configured.")
+    with httpx.Client(timeout=30.0) as client:
+        http_evidence = (
+            EvidenceService(PublicHttpProvider(client, default_cache())) if request.hydrate else None
+        )
+        browser_evidence = (
+            EvidenceService(ChromeProvider(default_browser_profile(), cache=default_cache()))
+            if request.allow_browser
+            else None
+        )
+        service = DiscoveryService(
+            BraveDiscoveryProvider(client, api_key),
+            default_discovery_store(),
+            http_evidence=http_evidence,
+            browser_evidence=browser_evidence,
+        )
+        output.success(service.search(request))
+
+
+@discovery_app.command("hydrate")
+def discovery_hydrate(
+    context: typer.Context,
+    input_path: str = typer.Option(..., "--input", help="Candidate Batch JSON file, or - for stdin."),
+    priority_hydrate: int | None = typer.Option(None, "--priority-hydrate", min=0, max=20),
+    max_hydrate: int | None = typer.Option(None, "--max-hydrate", min=0, max=20),
+    require_account_match: bool = typer.Option(False, "--require-account-match"),
+    require_published_date: bool = typer.Option(False, "--require-published-date"),
+    browser: bool = typer.Option(
+        False,
+        "--browser",
+        help="Explicitly allow serial Chrome fallback after HTTP verification pages.",
+    ),
+) -> None:
+    """Validate and hydrate one agent-orchestrated Candidate Batch."""
+    output = _output(context)
+    batch = _candidate_batch_request(input_path)
+    effective_priority = (
+        batch.hydration.priority_count
+        if priority_hydrate is None
+        else priority_hydrate
+    )
+    effective_maximum = (
+        batch.hydration.maximum_attempts if max_hydrate is None else max_hydrate
+    )
+    if effective_priority > effective_maximum:
+        raise ValidationError("priority_hydrate must not exceed max_hydrate.")
+    with httpx.Client(timeout=30.0) as client:
+        http_evidence = EvidenceService(PublicHttpProvider(client, default_cache()))
+        browser_evidence = (
+            EvidenceService(ChromeProvider(default_browser_profile(), cache=default_cache()))
+            if browser
+            else None
+        )
+        service = CandidateIngestionService(
+            default_discovery_store(),
+            http_evidence=http_evidence,
+            browser_evidence=browser_evidence,
+        )
+        output.success(
+            service.ingest(
+                batch,
+                priority_hydrate=priority_hydrate,
+                max_hydrate=max_hydrate,
+                require_account_match=require_account_match,
+                require_published_date=require_published_date,
+                allow_browser=browser,
+            )
+        )
+
+
+@discovery_auth_app.command("configure")
+def discovery_auth_configure(
+    context: typer.Context,
+    provider: str = typer.Option("brave", "--provider"),
+) -> None:
+    """Interactively store one discovery credential in Windows Credential Manager."""
+    output = _output(context)
+    _require_brave(provider)
+    if output.json_mode or not is_interactive():
+        raise InputError("Discovery credential setup requires an interactive terminal.")
+    api_key = typer.prompt("Brave API key", hide_input=True, confirmation_prompt=True, err=True)
+    default_discovery_secrets().set_brave_api_key(api_key)
+    output.success({"provider": "brave", "configured": True})
+
+
+@discovery_auth_app.command("status")
+def discovery_auth_status(
+    context: typer.Context,
+    provider: str = typer.Option("brave", "--provider"),
+) -> None:
+    """Report only whether the Brave credential exists."""
+    output = _output(context)
+    _require_brave(provider)
+    output.success(
+        {
+            "provider": "brave",
+            "configured": default_discovery_secrets().get_brave_api_key() is not None,
+        }
+    )
+
+
+@discovery_cache_app.command("clear")
+def discovery_cache_clear(context: typer.Context) -> None:
+    """Clear discovery cache and history without touching credentials or ArticleCache."""
+    output = _output(context)
+    output.success({"cleared": default_discovery_store().clear()})
 
 
 @cache_app.command("clear")
@@ -477,6 +677,157 @@ def doctor_command(
     output.success(report)
     if report.overall == "fail":
         raise typer.Exit(ExitCode.GENERAL)
+
+
+def _output(context: typer.Context) -> Output:
+    output = context.find_root().obj
+    if not isinstance(output, Output):
+        raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    return output
+
+
+def _require_brave(provider: str) -> None:
+    if provider.casefold() != "brave":
+        raise ValidationError("Only the brave discovery provider is supported in wxcli 0.4.0.")
+
+
+def _has_explicit_discovery_search_options(context: typer.Context) -> bool:
+    option_names = (
+        "query",
+        "company",
+        "account",
+        "published_after",
+        "published_before",
+        "limit",
+        "cursor",
+        "checkpoint",
+        "new_only",
+        "hydrate",
+        "priority_hydrate",
+        "max_hydrate",
+        "require_account_match",
+        "require_published_date",
+        "browser",
+    )
+    return any(
+        (source := context.get_parameter_source(name)) is not None
+        and source.name == "COMMANDLINE"
+        for name in option_names
+    )
+
+
+def _discovery_request(
+    *,
+    query: str | None,
+    input_path: str | None,
+    companies: list[str],
+    accounts: list[str],
+    published_after: str | None,
+    published_before: str | None,
+    limit: int,
+    cursor: str | None,
+    checkpoint: str | None,
+    new_only: bool,
+    hydrate: bool,
+    priority_hydrate: int,
+    max_hydrate: int,
+    require_account_match: bool,
+    require_published_date: bool,
+    allow_browser: bool,
+) -> DiscoveryRequest:
+    if input_path is not None:
+        has_cli_search_options = any(
+            (
+                query is not None,
+                bool(companies),
+                bool(accounts),
+                published_after is not None,
+                published_before is not None,
+                limit != 50,
+                cursor is not None,
+                checkpoint is not None,
+                new_only,
+                hydrate,
+                priority_hydrate != 10,
+                max_hydrate != 20,
+                require_account_match,
+                require_published_date,
+                allow_browser,
+            )
+        )
+        if has_cli_search_options:
+            raise InputError("--input cannot be combined with query or search options.")
+        try:
+            raw = sys.stdin.read() if input_path == "-" else Path(input_path).read_text(encoding="utf-8")
+        except OSError as error:
+            raise InputError("The discovery input file could not be read.") from error
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise InputError("The discovery input is not valid JSON.") from error
+    else:
+        if query is None:
+            raise InputError("Provide a discovery query or --input.")
+        payload = {
+            "schema_version": "1",
+            "query": query,
+            "companies": companies,
+            "expected_accounts": [
+                {"display_names": [display_name]} for display_name in accounts
+            ],
+            "published_after": published_after,
+            "published_before": published_before,
+            "limit": limit,
+            "cursor": cursor,
+            "checkpoint": checkpoint,
+            "new_only": new_only,
+            "hydrate": hydrate,
+            "priority_hydrate": priority_hydrate,
+            "max_hydrate": max_hydrate,
+            "require_account_match": require_account_match,
+            "require_published_date": require_published_date,
+            "allow_browser": allow_browser,
+        }
+    try:
+        return DiscoveryRequest.model_validate(payload)
+    except PydanticValidationError as error:
+        raise ValidationError("The discovery request does not match schema version 1.") from error
+
+
+def _candidate_batch_request(input_path: str) -> CandidateBatchRequest:
+    raw = _read_bounded_candidate_batch(input_path)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise InputError("The Candidate Batch input is not valid JSON.") from error
+    try:
+        return CandidateBatchRequest.model_validate(payload)
+    except PydanticValidationError as error:
+        raise ValidationError("The Candidate Batch does not match schema version 1.") from error
+
+
+def _read_bounded_candidate_batch(input_path: str) -> str:
+    raw: str | bytes
+    try:
+        if input_path == "-":
+            stream = getattr(sys.stdin, "buffer", sys.stdin)
+            raw = stream.read(MAX_CANDIDATE_BATCH_BYTES + 1)
+        else:
+            with Path(input_path).open("rb") as stream:
+                raw = stream.read(MAX_CANDIDATE_BATCH_BYTES + 1)
+    except OSError as error:
+        raise InputError("The Candidate Batch input could not be read.") from error
+    if isinstance(raw, str):
+        encoded = raw.encode("utf-8")
+        if len(encoded) > MAX_CANDIDATE_BATCH_BYTES:
+            raise ValidationError("The Candidate Batch exceeds the 2 MiB limit.")
+        return raw
+    if len(raw) > MAX_CANDIDATE_BATCH_BYTES:
+        raise ValidationError("The Candidate Batch exceeds the 2 MiB limit.")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise InputError("The Candidate Batch input must be UTF-8.") from error
 
 
 def main() -> None:
