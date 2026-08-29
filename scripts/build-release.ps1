@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$AllowDirty
+    [switch]$AllowDirty,
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,7 +14,6 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $buildRoot = Join-Path $projectRoot 'build\release'
 $distRoot = Join-Path $projectRoot 'dist\release'
-$stagingRoot = Join-Path $distRoot '.staging'
 
 function Assert-LastCommand([string]$Description) {
     if ($LASTEXITCODE -ne 0) {
@@ -32,6 +32,17 @@ function Remove-SafeProjectDirectory([string]$Path) {
     }
     if (Test-Path -LiteralPath $resolved) {
         Remove-Item -LiteralPath $resolved -Recurse -Force
+    }
+}
+
+function Remove-SafeProjectFile([string]$Path) {
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    $rootPrefix = $projectRoot.TrimEnd('\') + '\'
+    if (-not $resolved.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove a file outside the project: $resolved"
+    }
+    if (Test-Path -LiteralPath $resolved) {
+        Remove-Item -LiteralPath $resolved -Force
     }
 }
 
@@ -93,9 +104,24 @@ $artifactName = "wxcli-$version-windows-x64"
 $artifactDirectory = Join-Path $distRoot $artifactName
 $zipPath = Join-Path $distRoot "$artifactName.zip"
 $checksumPath = "$zipPath.sha256"
+$stagingRoot = Join-Path (Join-Path $distRoot '.staging') $artifactName
+
+$existingArtifacts = @(
+    @($artifactDirectory, $zipPath, $checksumPath) |
+        Where-Object { Test-Path -LiteralPath $_ }
+)
+if ($existingArtifacts.Count -gt 0 -and -not $Force) {
+    $existingList = $existingArtifacts -join ', '
+    throw "Release artifacts already exist for ${version}: $existingList. Re-run with -Force to replace only this version."
+}
+if ($Force) {
+    Remove-SafeProjectDirectory $artifactDirectory
+    Remove-SafeProjectFile $zipPath
+    Remove-SafeProjectFile $checksumPath
+}
 
 Remove-SafeProjectDirectory $buildRoot
-Remove-SafeProjectDirectory $distRoot
+Remove-SafeProjectDirectory $stagingRoot
 New-Item -ItemType Directory -Path $buildRoot, $stagingRoot -Force | Out-Null
 
 $buildEnvironment = Join-Path $buildRoot 'venv'
