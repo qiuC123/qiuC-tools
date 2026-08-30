@@ -27,11 +27,20 @@ wxcli --json article get "URL" --no-cache
 ## 验证页
 
 `VERIFICATION_REQUIRED` 表示微信返回了验证页，不表示文章不存在，也不表示
-解析器崩溃。只有用户明确授权打开浏览器后，才能执行：
+解析器崩溃。只有用户明确授权打开浏览器后，才能直接执行：
 
 ```powershell
 wxcli --json article get "URL" --browser
 ```
+
+希望仍然先尝试 HTTP、仅在验证页后启动一次可见 Chrome 时，使用：
+
+```powershell
+wxcli --json article get "URL" --browser-fallback
+```
+
+`--no-browser` 会禁止本次调用使用 Chrome，即使用户级长期策略已经设为
+`auto-fallback`。长期策略默认是 `never`。
 
 如果可见 Chrome 中出现扫码、滑块或确认页面，让用户手工完成。禁止自动破解或
 绕过验证。wxcli 使用独立持久 profile，不使用或导出用户日常 Chrome Cookie。

@@ -1,8 +1,8 @@
 # WeChat Article Discovery Design
 
-**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented in wxcli 0.4.0.**
+**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; media evidence for 0.6.0 remains an approved design, not implemented.**
 
-This document records the wxcli 0.4.0 article-discovery contract. The implementation preserves existing commands, JSON envelopes, exit codes, cache behavior, and read-only safety boundaries. Live Brave, WeChat, and Chrome smoke tests still require separate explicit authorization.
+This document records the wxcli 0.4.0 discovery foundation and its backward-compatible 0.5.0 browser reliability extension. The implementation preserves existing commands, JSON envelopes, exit codes, cache behavior, and read-only safety boundaries. Live Brave, WeChat, and Chrome smoke tests still require separate explicit authorization.
 
 ## Product boundary
 
@@ -244,7 +244,25 @@ Only direct HTTPS `mp.weixin.qq.com/s` results that satisfy the existing strict 
 
 Candidates are deduplicated and ranked from sanitized search metadata before Hydration. When Hydration is enabled, up to the first 10 ranked candidates are priority attempts. Additional candidates may be selected for expected-account, company, keyword, recency, uncertainty, or source-diversity reasons, but no more than 20 candidates are attempted per invocation. These are generic relevance decisions, never recruitment-batch classifications.
 
-HTTP Content Providers run before any browser fallback. HTTP Hydration uses at most three concurrent requests, a 30-second per-article timeout, one retry for a network error, and a five-minute batch deadline. Verification pages, not-found pages, and parse failures are not retried. Chrome never opens unless the local CLI invocation includes `--browser`; input JSON cannot authorize it. Chrome runs serially in the visible dedicated profile, never bypasses verification, and never exports cookies.
+HTTP Content Providers run before any browser fallback. HTTP Hydration uses at most three concurrent requests, a 30-second per-article timeout, one retry for a network error, and a five-minute batch deadline. Verification pages, not-found pages, and parse failures are not retried. In 0.4.0, Chrome opens only when the local CLI invocation includes `--browser` or a trusted Direct Discovery Request contains `allow_browser: true`; Candidate Batch JSON cannot authorize it. Chrome runs serially in the visible dedicated profile, never bypasses verification, and never exports cookies.
+
+## Implemented 0.5.0 browser contract
+
+Version 0.5.0 is limited to browser reliability and does not include image download, QR decoding, OCR, or Evidence Bundles. It introduces a user-level Browser Fallback Policy with these fixed semantics:
+
+- The installed default is `never`. A user may explicitly enable durable automatic fallback once and may revoke it later.
+- A trusted Direct Discovery Request may grant fallback for its own invocation through `allow_browser: true`, but it cannot modify the durable policy. Candidate Batches, Search Orchestrators, Article content, and calling-project data cannot grant browser use. A local per-invocation prohibition always overrides every grant.
+- Automatic fallback applies only to strict Public URLs after the HTTP Content Provider returns Verification Required. It cannot visit External Link Handoffs, company sites, ATS pages, Official Account administration pages, or QR payloads.
+- Existing `--browser` behavior remains backward compatible. The separate `--browser-fallback` control and trusted Direct Discovery Request authorization support callers that do not want durable authorization.
+- A batch gathers HTTP verification outcomes first, then creates at most one visible Browser Run and serially reads the eligible candidates through the one retained Browser Session. The Browser Run ends with the batch while the independent profile persists.
+- If the retained Browser Session still reaches a scan, slider, confirmation, or other human challenge, unattended execution preserves `verification_status: verification_required`, adds `verification_stage: browser` and `required_action: run_browser_login`, and immediately ends the Browser Run. It does not wait indefinitely, solve the challenge, or export Cookies. Completed Evidence is preserved and unvisited browser-eligible candidates require session refresh.
+- The whole command has a ten-minute hard deadline: HTTP may use at most five minutes and the single Browser Run may use the remaining time, never more than five minutes. Chrome crashes are reported without automatic restart in 0.5.0.
+- Missing durable policy means `never`; corrupt or unsupported policy safely degrades to `never` with a visible configuration diagnostic. Explicit per-invocation browser controls continue to work without trusting the damaged file.
+- `browser login` success means only that its visible window completed normally. Only a successful real Chrome Article read records `last_successful_read_at`.
+- One user-level wxcli profile serves all strict public WeChat Articles. It is not split by company or Official Account; Official Account API credentials remain separate in keyring.
+
+See [ADR-0006](adr/0006-persist-browser-fallback-authorization-outside-candidate-input.md).
+The complete implemented command, state, error, migration, and acceptance contract is in [Browser Fallback Design](browser-fallback.md).
 
 ## Identity and external links
 
@@ -271,11 +289,19 @@ External URLs observed in article markup are recorded with their raw value, norm
 
 Article discovery, strict candidate handling, ranking, bounded Hydration, Account Identity Evidence, content fingerprints, and external-link extraction. It does not download images for derived analysis, decode QR codes, or perform OCR.
 
-### 0.5.0
+### 0.5.0 (implemented)
+
+Durable, user-authorized HTTP-to-Chrome fallback; a local per-invocation prohibition; one visible Browser Run per Hydration batch; retained Browser Session reuse; and a bounded User Action Required outcome for challenges that still need a person. Existing 0.4.0 browser behavior remains compatible, Candidate input cannot authorize Chrome, and no Cookie import or export is added.
+
+### 0.6.0
 
 Standard QR decoding and local-only OCR through replaceable providers. QR payloads are recorded but never opened; possible WeChat Mini Program codes may be identified but are not promised to decode. OCR text remains derived evidence with image origin, confidence, and engine version and never merges into the Article body.
 
 Image processing is limited to HTTPS images referenced by the Article, blocks local/private network destinations and unsafe redirects, and defaults to at most 50 images, 10 MB per image, 100 MB total, and 20 seconds per image. Temporary files are deleted after extraction unless the user explicitly requests an evidence bundle. An explicit bundle contains versioned evidence JSON, Markdown, link and image manifests, hashes, and requested images; it omits raw search API responses and full dynamic WeChat HTML.
+
+Article Evidence schema v1 and its hashes remain unchanged. Media Analysis is explicit and produces separately versioned Media Evidence linked by `content_sha256`; Candidate Batch data cannot enable it or choose a filesystem path. Batch limits, local-only processing, Media Cache, partial-result, and atomic Evidence Bundle rules are frozen in [Media Evidence Design](media-evidence.md) and [ADR-0007](adr/0007-keep-media-analysis-separate-from-core-article-evidence.md).
+
+Non-media request and result documents remain schema v1. Media-enabled Direct Discovery Requests and outer results use schema v2, while embedded Article Evidence remains schema v1 and Media Evidence begins with its own schema v1. Candidate Batch input remains schema v1 and can be media-enabled only through a local CLI control.
 
 ## Test and acceptance contract
 
@@ -285,9 +311,9 @@ Live smoke tests require separate explicit authorization for search, real WeChat
 
 Candidate Ingestion tests use sanitized batches and fake Content Providers; ordinary tests never invoke Codex, Agent Reach, Exa, WeChat, or Chrome. They cover oversized documents, unknown fields, credentials in input, malformed and duplicate URLs, caller-supplied evidence claims, prompt-injection text treated only as inert strings, bounded Hydration, and safe partial results. A separate manually authorized agent-first smoke exercises Codex CLI → Agent Reach/Exa → Candidate Batch → wxcli, while visible Chrome remains a distinct authorization.
 
-The direct Brave manual entry point is `scripts/live-discovery-smoke.ps1`. It refuses to run without `-AllowLiveSearch`; source Hydration additionally requires `-AllowLiveWeChat`, and visible Chrome additionally requires `-AllowBrowser`.
+The direct Brave manual entry point is `scripts/live-discovery-smoke.ps1`. It refuses to run without `-AllowLiveSearch`; source Hydration additionally requires `-AllowLiveWeChat`, and visible Chrome additionally requires `-AllowBrowser`, which maps to one-shot `--browser-fallback`.
 
-The agent-first manual entry point is `scripts/live-agent-discovery-smoke.ps1`. It independently requires `-AllowLiveAgentSearch` before invoking ephemeral, read-only `codex exec`, and `-AllowLiveWeChat` before handing its schema-constrained Candidate Batch to wxcli. Visible Chrome additionally requires `-AllowBrowser`. `-CodexPath` and `-WxcliPath` select the exact executables; the script refuses wxcli versions older than 0.4.0. Ordinary tests and the packaged offline smoke never invoke either live script.
+The agent-first manual entry point is `scripts/live-agent-discovery-smoke.ps1`. It independently requires `-AllowLiveAgentSearch` before invoking ephemeral, read-only `codex exec`, and `-AllowLiveWeChat` before handing its schema-constrained Candidate Batch to wxcli. Visible Chrome additionally requires `-AllowBrowser`, which maps to one-shot `--browser-fallback`. `-CodexPath` and `-WxcliPath` select the exact executables; the 0.5.0 script refuses older wxcli versions. Ordinary tests and the packaged offline smoke never invoke either live script.
 
 Initial acceptance targets are:
 
@@ -296,6 +322,7 @@ Initial acceptance targets are:
 - No more than 5% complete Discovery Provider request failures.
 - With daily execution, discovery delay `P50 <= 24 hours` and `P90 <= 72 hours` where a reliable `published_at` exists.
 - Discovery implementation line coverage at least 95%, branch coverage at least 90%, and no reduction in repository-wide coverage.
-- For 0.5.0, at least 95% standard-QR decoding success on the representative benchmark with zero incorrect payloads, and Chinese OCR character error rate no greater than 10% on readable recruitment-poster fixtures.
+- For 0.5.0, an HTTP-success batch starts zero Browser Runs; a verification-only batch creates at most one Browser Run; disabled, invalid-policy, or locally prohibited fallback never starts Chrome; a retained session is reused across invocations; a remaining human challenge terminates the Browser Run without changing the existing verification-status enum; Chrome crashes do not restart automatically; total execution stays within ten minutes; and no wxcli Chrome process remains after the batch.
+- For 0.6.0, at least 95% standard-QR decoding success on the representative benchmark with zero incorrect payloads, and Chinese OCR character error rate no greater than 10% on readable recruitment-poster fixtures.
 
 Verification-required, not-found, network, and parse outcomes are reported separately rather than collapsed into one failure rate.

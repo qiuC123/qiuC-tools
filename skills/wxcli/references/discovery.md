@@ -18,8 +18,10 @@ Get-Content candidates.json | wxcli --json discovery hydrate --input -
 Cookie、认证头、发布时间、身份结论或 Article Evidence。Exa 凭证属于 Agent 运行环境，
 wxcli 不得读取或保存。
 
-浏览器授权只能来自本地 CLI 的显式 `--browser`，不能写进 Candidate Batch。没有该参数时，
-即使 HTTP 遇到验证页也不得打开 Chrome。
+Candidate Batch 不能携带浏览器授权。本地 CLI 可用 `--browser-fallback` 做本次授权，
+也可在用户已经明确设置长期 `auto-fallback` 后自动处理 HTTP 验证页；`--no-browser`
+始终覆盖这些授权。可信 Direct Discovery Request 的 `allow_browser: true` 只授权自身调用，
+不会修改长期策略。
 
 ## Direct Discovery
 
@@ -55,11 +57,13 @@ wxcli --json discovery search "关键词" --hydrate
 wxcli --json article evidence "URL"
 ```
 
-默认 HTTP 遇到 `VERIFICATION_REQUIRED` 就停止。只有用户明确授权后，才在批量命令
-或单篇命令加 `--browser`。不得自动打开 Chrome、绕过验证或导出 Cookie。
+默认长期策略为 `never`，HTTP 遇到 `VERIFICATION_REQUIRED` 就停止。用户可对批量或
+单篇命令加 `--browser-fallback` 做一次性授权；兼容的 `--browser` 在单篇命令中仍直接
+使用 Chrome。若 Chrome 仍要求人工验证，结果会给出 `required_action:
+run_browser_login` 并停止本次 Browser Run。不得绕过验证或导出 Cookie。
 
 ## 职责边界
 
 wxcli 可提取公众号显示名、公开 `biz_id`、正文外链、图片 URL 清单与稳定哈希，
 但不会继续访问官网或 ATS，也不判断企业、招聘批次、岗位或申请渠道。二维码和 OCR
-不属于 0.4.0。调用方应以 `article_identity` 做长期幂等，并自行处理微信之外的来源。
+不属于 0.5.0。调用方应以 `article_identity` 做长期幂等，并自行处理微信之外的来源。

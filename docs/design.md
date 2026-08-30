@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-wxcli is a Windows x64 command-line tool for reading WeChat Official Account content and, under the approved V2 extension below, explicitly creating one new unpublished draft from Word. Its command groups are `article`, `account`, `auth`, `browser`, `cache`, and `doctor`; `--version` reports its version. The tool never publishes, mass-sends, deletes, edits existing content, bypasses verification, or exports cookies.
+wxcli is a Windows x64 command-line tool for discovering and reading WeChat Official Account content and, under the approved V2 extension below, explicitly creating one new unpublished draft from Word. Its command groups include `article`, `discovery`, `account`, `auth`, `browser`, `cache`, and `doctor`; `--version` reports its version. The tool never publishes, mass-sends, deletes, bypasses verification, or exports cookies.
 
 ## Runtime and distribution
 
@@ -14,7 +14,7 @@ The supported development runtime is Python 3.12 on Windows. The implementation 
 
 ## Command contract
 
-With `--json`, standard output contains exactly one UTF-8 JSON document. Logs, prompts, and progress messages use standard error. Exit codes are: 0 success, 1 general, 2 input, 3 validation, 4 not found, 5 network, 6 authentication or permission, 7 Chrome, 8 parsing, and 9 local configuration. Non-interactive execution never waits for a prompt. A verification requirement returns `VERIFICATION_REQUIRED`; only explicit `--browser` may open Chrome.
+With `--json`, standard output contains exactly one UTF-8 JSON document. Logs, prompts, and progress messages use standard error. Exit codes are: 0 success, 1 general, 2 input, 3 validation, 4 not found, 5 network, 6 authentication or permission, 7 Chrome, 8 parsing, and 9 local configuration. Non-interactive execution never waits for a prompt. A verification requirement returns `VERIFICATION_REQUIRED`. Chrome may open only through direct `--browser`, one-shot `--browser-fallback`, a trusted Direct Discovery Request grant, or the user's durable `auto-fallback` policy; `--no-browser` always prohibits it for that invocation.
 
 ## URL, cache, and secrets
 

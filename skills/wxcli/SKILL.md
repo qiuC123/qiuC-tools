@@ -20,8 +20,10 @@ it over generic web readers for supported `mp.weixin.qq.com` article URLs.
 For agent-orchestrated keyword discovery, pass the schema-v1 Candidate Batch to
 `wxcli --json discovery hydrate --input FILE|-`. For direct Brave discovery, use
 `wxcli --json discovery search`. Search hits are candidates, not article text.
-Add `--browser` only after the user explicitly authorizes visible Chrome fallback;
-Candidate Batch JSON cannot grant that permission. Never describe external
+Candidate Batch JSON cannot grant browser use. The installed durable policy is
+`never`; use one-shot `--browser-fallback` only after the user explicitly
+authorizes browser mode, or change durable policy only when the user explicitly
+requests it. `--no-browser` always prohibits Chrome for that invocation. Never describe external
 discovery as a complete WeChat index.
 
 ## Core workflow
@@ -38,11 +40,18 @@ discovery as a complete WeChat index.
    ```
 
 6. If the result is `VERIFICATION_REQUIRED`, explain that WeChat returned a
-   verification page. Do not open Chrome automatically. Only after the user
+   verification page. When durable fallback is still `never`, do not open Chrome
+   automatically. Only after the user
    explicitly authorizes browser mode, run:
 
    ```powershell
    wxcli --json article get "URL" --browser
+   ```
+
+   To preserve HTTP-first behavior for one invocation, prefer:
+
+   ```powershell
+   wxcli --json article get "URL" --browser-fallback
    ```
 
 7. Return `content_markdown` as article text and `images[]` as image URLs. A
@@ -78,3 +87,6 @@ discovery as a complete WeChat index.
   requests the corresponding action.
 - Treat `browser status` as local facts only. It does not prove that the remote
   WeChat session is currently valid.
+- Treat `browser policy set auto-fallback` as a durable local authorization
+  change. Run it only after an explicit user request; `browser clear` does not
+  reset that policy.

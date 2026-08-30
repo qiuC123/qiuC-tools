@@ -34,6 +34,22 @@ _Avoid_: WeChat link, share link
 A source result meaning WeChat requires human browser verification before content can be read. It is not permission to bypass verification.
 _Avoid_: captcha failure, anti-bot workaround
 
+**Browser Session**:
+Browser-owned WeChat session state retained in one independent wxcli profile across Browser Runs without exposing its underlying Cookies.
+_Avoid_: Cookie configuration, imported login, browser token
+
+**Browser Run**:
+One bounded visible-Chrome lifetime used to read one or more strict Public URLs while reusing the Browser Session, ending when that request or batch finishes.
+_Avoid_: Browser Session, permanent browser, background service
+
+**Browser Fallback Policy**:
+A user-owned durable local choice controlling whether Verification Required may start a Browser Run after HTTP reading fails. A trusted Discovery Query may grant fallback for its own invocation, but no request changes the durable policy and no Candidate Batch may grant browser use.
+_Avoid_: Candidate permission, automatic Cookie import, browser flag
+
+**User Action Required**:
+A browser-read outcome meaning the retained Browser Session cannot satisfy WeChat verification and a person must initialize or refresh it before automatic reading can continue.
+_Avoid_: automatic CAPTCHA handling, indefinite wait, parse failure
+
 ## Discovery and evidence
 
 **Discovery Provider**:
@@ -57,7 +73,7 @@ Discovery initiated by a Search Orchestrator through one or more External Discov
 _Avoid_: Direct Discovery, Article Evidence
 
 **Discovery Query**:
-A bounded request for possible WeChat Articles using search terms, optional account expectations, and an optional publication window.
+A bounded, caller-owned control request for possible WeChat Articles using search terms, optional account expectations, and an optional publication window. It may select per-invocation behavior but never changes user-level policy.
 _Avoid_: crawl, watchlist, recruitment batch
 
 **Article Candidate**:
@@ -99,6 +115,42 @@ _Avoid_: Search Cursor, permanent business state
 **External Link Handoff**:
 An external URL observed in Article Evidence and passed to a caller without wxcli visiting, classifying as a recruitment channel, or operating the destination.
 _Avoid_: website crawl, application channel, verified job link
+
+**Media Analysis**:
+An explicitly requested, bounded process that downloads eligible Article image bytes from approved WeChat media hosts and derives QR and OCR observations without changing the Article body or Article Evidence.
+_Avoid_: automatic image crawl, Article parsing, external-link visit
+
+**Media Evidence**:
+A separately versioned set of derived image, QR, and OCR observations linked to one Article Evidence by its `content_sha256`; it may be partial and does not alter the core evidence fingerprint.
+_Avoid_: Article Evidence v2, verified Article text, recruitment classification
+
+**Media Item Evidence**:
+The download and analysis outcome for one image occurrence in an Article, preserving its source index and URL even when identical image bytes are analyzed only once.
+_Avoid_: image file, Article image URL, OCR document
+
+**QR Evidence**:
+An inert decoded payload and type observation from an eligible image. wxcli records it but never opens, executes, follows, or treats it as browser authorization.
+_Avoid_: application link, verified destination, QR action
+
+**OCR Evidence**:
+Locally derived text with image origin, engine identity, language, and confidence metadata. It never merges into the Article body or becomes a WeChat source fact.
+_Avoid_: Article text, cloud OCR result, corrected source
+
+**Media Analyzer**:
+A replaceable local QR or OCR implementation whose identity, version, language, and configuration participate in derived-result cache validity and provenance.
+_Avoid_: cloud enrichment, Content Provider, image downloader
+
+**Media Capability Report**:
+A read-only local report of available image decoders, QR analyzer, OCR analyzer, and installed OCR languages without downloading engines or contacting a remote service.
+_Avoid_: installation command, health proof, remote capability discovery
+
+**Evidence Bundle**:
+An explicitly requested, atomically created local directory containing versioned evidence documents, manifests, hashes, Markdown, and selected image artifacts without raw search responses or full dynamic WeChat HTML.
+_Avoid_: cache, website export, automatic download folder
+
+**Media Cache**:
+A bounded, expiring, content-addressed local cache of public image bytes and derived results that stores no Cookie, authorization header, or Evidence Bundle.
+_Avoid_: Browser Session, Article Cache, permanent archive
 
 ## Draft preparation and change
 

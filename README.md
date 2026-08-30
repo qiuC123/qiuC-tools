@@ -41,9 +41,9 @@ wxcli --json discovery auth status --provider brave
 # 只发现候选，不访问候选微信页面
 wxcli --json discovery search "2027 校园招聘" --company "示例公司" --account "示例招聘"
 
-# 显式回读分级选中的候选；只有再加 --browser 才允许验证页走可见 Chrome
+# 显式回读分级选中的候选；一次性回退只在 HTTP 验证页后打开 Chrome
 wxcli --json discovery search "2027 校园招聘" --hydrate
-wxcli --json discovery search "2027 校园招聘" --hydrate --browser
+wxcli --json discovery search "2027 校园招聘" --hydrate --browser-fallback
 
 # 版本化 JSON 可来自文件或标准输入；二者都不能携带 API Key
 wxcli --json discovery search --input .\request.json
@@ -56,13 +56,20 @@ Get-Content .\candidates.json | wxcli --json discovery hydrate --input -
 # 只清理发现缓存、候选历史和 checkpoint 状态
 wxcli --json discovery cache clear
 
-# 只有显式指定 --browser 才会打开可见 Chrome
+# --browser 保留直接使用 Chrome 的兼容语义；--browser-fallback 先尝试 HTTP
 wxcli article get "https://mp.weixin.qq.com/s/example" --browser
+wxcli article get "https://mp.weixin.qq.com/s/example" --browser-fallback
+wxcli article get "https://mp.weixin.qq.com/s/example" --no-browser
 
 # 管理浏览器专用资料目录；status 绝不会启动 Chrome
 wxcli browser login
 wxcli browser status
 wxcli browser clear
+
+# 默认长期策略为 never；用户可以明确启用、撤销或仅禁止本次调用
+wxcli browser policy set auto-fallback
+wxcli browser policy set never
+wxcli --json browser policy status
 
 # 清除公共文章成功缓存
 wxcli cache clear
@@ -101,18 +108,18 @@ wxcli doctor
 wxcli doctor --allow-live-api
 ```
 
-`browser status` 只报告本地专用 profile 是否存在，以及本地记录的 `last_verified_at`。它不会打开 Chrome，也不能据此断言当前微信会话仍然有效。
+`browser status` 只报告本地专用 profile、旧版迁移的 `legacy_last_verified_at` 和真实文章成功回读产生的 `last_successful_read_at`。`browser login` 正常结束只代表可见窗口流程完成，不证明远端会话有效。状态命令绝不会打开 Chrome。
 
 ## 微信文章发现与证据
 
 - Agent-first 路径由 Codex CLI 配合 Agent Reach/Exa 生成 Candidate Batch，再交给 `discovery hydrate`。wxcli 不读取 Exa 凭证，也不把 Agent 的判断当成证据。Candidate Batch 最多 100 条、2 MiB，未知字段一律拒绝。
-- Candidate Batch 不能授权浏览器。只有用户明确同意后，才能在本地命令追加 `--browser`；默认绝不启动 Chrome。
+- Candidate Batch 不能授权浏览器。默认长期策略为 `never`；用户可以本地追加 `--browser-fallback`、使用可信 Direct Discovery Request 的本次授权，或明确设置长期 `auto-fallback`。`--no-browser` 对本次调用拥有最高优先级。
 - `discovery search` 使用 Brave Web Search，并强制加入 `site:mp.weixin.qq.com/s`。它是“微信公众号文章发现”，不是微信官方搜索，也不承诺全微信、全量或实时无延迟。
 - 搜索命中始终只是 Candidate。只有 `--hydrate` 成功读取真实微信原文后才会产生 Article Evidence；失败会保留为安全的 `hydration_attempt`，不会用搜索摘要伪造正文。
 - 默认最多返回 50 个候选。启用回读后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
-- `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at` 和 `last_verified_at` 含义不同。
+- `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
 - `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
-- wxcli 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。二维码和 OCR 计划在 0.5.0，0.4.0 尚不提供。
+- wxcli 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。二维码、OCR 和 Media Evidence 计划在 0.6.0，0.5.0 尚不提供。
 - 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
 
 完整 schema、部分成功语义和验收口径见 [文章发现说明](docs/article-discovery.md)。
@@ -126,7 +133,7 @@ https://mp.weixin.qq.com/s/<token>
 https://mp.weixin.qq.com/s?__biz=...&mid=...
 ```
 
-遇到验证页时，非交互环境会立即返回 `VERIFICATION_REQUIRED`，不会停在那里等待输入，也不会尝试绕过验证码。只有用户显式传入 `--browser` 时才会打开 Chrome。
+遇到验证页时，未授权浏览器的非交互环境会立即返回 `VERIFICATION_REQUIRED`。获准自动回退时，一个批次最多启动一次可见 Chrome；如果 Chrome 中仍出现扫码、滑块或确认页，wxcli 会立即停止该 Browser Run，返回 `verification_stage: browser` 和 `required_action: run_browser_login`，不会等待或绕过验证。
 
 ## JSON、标准输出与退出码
 
@@ -172,6 +179,7 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 - `auth test` 不会强制刷新尚未过期的 Token。
 - `doctor` 和 `auth test` 只有收到 `--allow-live-api` 明确授权后，才会执行真实微信网络/账号检查。
 - 公共文章缓存只保存成功结果，HTTP 与 Chrome 共用规范化 URL 键；失败页不会缓存。
+- 浏览器长期策略保存在非敏感的 `%LOCALAPPDATA%\wxcli\browser-policy.json`，独立 profile 自行保存会话 Cookie；wxcli 不读取、导入或导出 Cookie。策略损坏时安全降级为 `never`。
 - 微信 `qpic.cn` 图片在结果中只保留 URL。图片服务可能有防盗链，离开微信页面后不保证能直接显示。
 
 运行目录、缓存、专用 Chrome profile 和凭据都在仓库之外，并由 `.gitignore` 排除。
@@ -195,8 +203,8 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 
 ```powershell
 .\scripts\build-release.ps1
-.\dist\release\wxcli-0.4.0-windows-x64\wxcli.exe --version
-Get-FileHash .\dist\release\wxcli-0.4.0-windows-x64.zip -Algorithm SHA256
+.\dist\release\wxcli-0.5.0-windows-x64\wxcli.exe --version
+Get-FileHash .\dist\release\wxcli-0.5.0-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。本项目不会自动上传 GitHub、PyPI 或创建外部 Release。

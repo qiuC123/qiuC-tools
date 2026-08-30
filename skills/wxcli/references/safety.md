@@ -33,6 +33,8 @@ stderr。不要把两个 JSON、说明文字或 shell 标记混入 stdout。
 | 9 | 本地配置错误 |
 
 始终同时检查退出码与 JSON envelope。`VERIFICATION_REQUIRED` 映射到退出码 6。
+`BROWSER_BUSY` 映射到退出码 7。浏览器仍出现人工挑战时继续使用
+`VERIFICATION_REQUIRED`，并附加安全的 browser stage 与 required action。
 
 ## 凭证与隐私
 
