@@ -1,4 +1,4 @@
-"""Top-level command-line interface for wxcli."""
+"""Top-level command-line interface for WeChat OA."""
 
 from __future__ import annotations
 
@@ -51,8 +51,8 @@ from wxcli.providers.official import OfficialAccountProvider
 from wxcli.providers.chrome import CHROME_PATH
 
 app = typer.Typer(
-    name="wxcli",
-    help="Windows WeChat CLI: explicitly confirmed draft changes and read-only discovery.",
+    name="wechat-oa",
+    help="WeChat Official Account CLI: read content and safely prepare unpublished drafts.",
     no_args_is_help=False,
     add_completion=False,
 )
@@ -87,7 +87,7 @@ def default_cache() -> ArticleCache:
 
 
 def default_browser_profile() -> BrowserProfile:
-    """Return wxcli's independent profile and local status paths."""
+    """Return WeChat OA's independent profile and local status paths."""
     root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "wxcli"
     return BrowserProfile(root / "chrome-profile", root / "browser-state.json")
 
@@ -161,7 +161,7 @@ def root(
     version: bool = typer.Option(
         False,
         "--version",
-        help="Show the wxcli version and exit.",
+        help="Show the WeChat OA version and exit.",
     ),
 ) -> None:
     """Discover or read WeChat content, or explicitly create an unpublished draft."""
@@ -495,7 +495,7 @@ def browser_login(context: typer.Context) -> None:
     output = context.find_root().obj
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
-    output.diagnostic("Chrome is opening with the wxcli-only profile.")
+    output.diagnostic("Chrome is opening with the WeChat OA-only profile.")
     ChromeProvider(default_browser_profile()).open_login()
     output.success({"opened": True, "session_validity": "not_verified"})
 
@@ -520,7 +520,7 @@ def browser_status(context: typer.Context) -> None:
 
 @browser_app.command("clear")
 def browser_clear(context: typer.Context) -> None:
-    """Delete only wxcli's dedicated Chrome profile and local status record."""
+    """Delete only WeChat OA's dedicated Chrome profile and local status record."""
     output = context.find_root().obj
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
@@ -840,7 +840,7 @@ def _output(context: typer.Context) -> Output:
 
 def _require_brave(provider: str) -> None:
     if provider.casefold() != "brave":
-        raise ValidationError("Only the brave discovery provider is supported in wxcli 0.5.0.")
+        raise ValidationError("Only the brave discovery provider is supported in WeChat OA 0.5.x.")
 
 
 def _has_explicit_discovery_search_options(context: typer.Context) -> bool:

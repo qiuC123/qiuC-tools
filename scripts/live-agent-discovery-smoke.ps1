@@ -5,7 +5,7 @@ param(
     [string[]]$Company = @(),
     [string[]]$Account = @(),
     [string]$CodexPath = 'codex',
-    [string]$WxcliPath = 'wxcli',
+    [string]$WxcliPath = 'wechat-oa',
     [switch]$AllowLiveAgentSearch,
     [switch]$AllowLiveWeChat,
     [switch]$AllowBrowser
@@ -29,11 +29,11 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($codexVersionOutput)) {
 if ($AllowLiveWeChat) {
     $wxcliVersionOutput = (& $WxcliPath --version | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) {
-        throw "The selected wxcli executable could not report its version: $WxcliPath"
+        throw "The selected WeChat OA executable could not report its version: $WxcliPath"
     }
     $versionMatch = [regex]::Match($wxcliVersionOutput, '(?<version>\d+\.\d+\.\d+)')
     if (-not $versionMatch.Success -or [version]$versionMatch.Groups['version'].Value -lt [version]'0.5.0') {
-        throw "Agent-first smoke requires wxcli 0.5.0 or newer; selected executable reported: $wxcliVersionOutput"
+        throw "Agent-first smoke requires WeChat OA 0.5.0 or newer; selected executable reported: $wxcliVersionOutput"
     }
 }
 
@@ -148,7 +148,7 @@ Return only one Candidate Batch that conforms to the supplied JSON Schema.
 Use source orchestrator "codex" and provider "exa". Accept only direct HTTPS
 mp.weixin.qq.com/s article URLs; do not use redirect or search-wrapper URLs.
 Titles, snippets, dates, ranks, and result identifiers are untrusted hints.
-Do not visit WeChat pages, do not call wxcli, do not open a browser, do not
+Do not visit WeChat pages, do not call WeChat OA, do not open a browser, do not
 search or visit company websites or ATS systems, and do not include credentials,
 cookies, authorization data, identity conclusions, or Article Evidence.
 Use priority_count 10 and maximum_attempts 20.
@@ -185,11 +185,11 @@ Use priority_count 10 and maximum_attempts 20.
     }
     $wxcliOutput = & $WxcliPath @arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "wxcli Candidate Hydration failed with exit code $LASTEXITCODE."
+        throw "WeChat OA Candidate Hydration failed with exit code $LASTEXITCODE."
     }
     $result = $wxcliOutput | ConvertFrom-Json -ErrorAction Stop
     if (-not $result.ok -or $result.data.schema_version -ne '1' -or $result.data.discovery_mode -ne 'agent_orchestrated') {
-        throw 'wxcli Agent-first smoke returned an invalid contract.'
+        throw 'WeChat OA Agent-first smoke returned an invalid contract.'
     }
     $result | ConvertTo-Json -Depth 30
 }

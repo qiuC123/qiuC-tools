@@ -34,9 +34,15 @@ $previousDirectory = Join-Path $installRoot 'previous'
 $newDirectory = Join-Path $installRoot 'current.new'
 $swapDirectory = Join-Path $installRoot 'current.swap-tmp'
 $skillSnapshotsRoot = Join-Path $installRoot 'skills'
-$sourceSkillDirectory = Join-Path $projectRoot 'skills\wxcli'
 $agentSkillsRoot = Join-Path $userProfile '.agents\skills'
-$installedSkillDirectory = Join-Path $agentSkillsRoot 'wxcli'
+$sourceSkillDirectories = [ordered]@{
+    'wechat-oa' = Join-Path $projectRoot 'skills\wechat-oa'
+    'wxcli' = Join-Path $projectRoot 'skills\wxcli'
+}
+$installedSkillDirectories = [ordered]@{
+    'wechat-oa' = Join-Path $agentSkillsRoot 'wechat-oa'
+    'wxcli' = Join-Path $agentSkillsRoot 'wxcli'
+}
 $warnings = [System.Collections.Generic.List[string]]::new()
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
@@ -69,9 +75,13 @@ function Move-SafeInstallDirectory([string]$Source, [string]$Destination) {
     [System.IO.Directory]::Move($resolvedSource, $resolvedDestination)
 }
 
-function Remove-SafeInstalledSkillDirectory {
-    $resolved = [System.IO.Path]::GetFullPath($installedSkillDirectory)
-    $expected = [System.IO.Path]::GetFullPath((Join-Path $agentSkillsRoot 'wxcli'))
+function Remove-SafeInstalledSkillDirectory([string]$SkillName) {
+    if (-not $installedSkillDirectories.Contains($SkillName)) {
+        throw "Refusing to remove an unexpected Agent Skill: $SkillName"
+    }
+    $installedDirectory = $installedSkillDirectories[$SkillName]
+    $resolved = [System.IO.Path]::GetFullPath($installedDirectory)
+    $expected = [System.IO.Path]::GetFullPath((Join-Path $agentSkillsRoot $SkillName))
     if (-not $resolved.Equals($expected, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to remove an unexpected Agent Skill directory: $resolved"
     }
@@ -166,23 +176,39 @@ function Read-ReleaseVersion([string]$Directory) {
 
 function Test-ReleaseDirectory([string]$Directory) {
     $releaseVersion = Read-ReleaseVersion $Directory
-    $script:executable = Join-Path $Directory 'wxcli.exe'
-    if (-not (Test-Path -LiteralPath $script:executable -PathType Leaf)) {
-        throw "The release is missing wxcli.exe: $Directory"
+    $primaryExecutable = Join-Path $Directory 'wechat-oa.exe'
+    $legacyExecutable = Join-Path $Directory 'wxcli.exe'
+    $hasPrimary = Test-Path -LiteralPath $primaryExecutable -PathType Leaf
+    $hasLegacy = Test-Path -LiteralPath $legacyExecutable -PathType Leaf
+    if (-not $hasPrimary -and -not $hasLegacy) {
+        throw "The release is missing both wechat-oa.exe and wxcli.exe: $Directory"
     }
+    $script:executable = if ($hasPrimary) { $primaryExecutable } else { $legacyExecutable }
 
     $plainVersion = Invoke-PackagedWxcli @('--version')
     if ($plainVersion.Stdout.Trim() -ne $releaseVersion -or -not [string]::IsNullOrEmpty($plainVersion.Stderr)) {
-        throw 'Installed wxcli plain version smoke test failed.'
+        throw 'Installed WeChat OA plain version smoke test failed.'
     }
     $jsonVersion = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', '--version'))
     if (-not $jsonVersion.ok -or $jsonVersion.data.version -ne $releaseVersion) {
-        throw 'Installed wxcli JSON version smoke test failed.'
+        throw 'Installed WeChat OA JSON version smoke test failed.'
+    }
+
+    if ($hasPrimary) {
+        if (-not $hasLegacy) {
+            throw 'The WeChat OA release is missing the wxcli compatibility executable.'
+        }
+        $script:executable = $legacyExecutable
+        $legacyVersion = Invoke-PackagedWxcli @('--version')
+        if ($legacyVersion.Stdout.Trim() -ne $releaseVersion -or -not [string]::IsNullOrEmpty($legacyVersion.Stderr)) {
+            throw 'Installed wxcli compatibility command smoke test failed.'
+        }
+        $script:executable = $primaryExecutable
     }
 
     $doctor = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'doctor') @(0, 1))
     if (-not $doctor.ok) {
-        throw 'Installed wxcli offline doctor smoke test failed.'
+        throw 'Installed WeChat OA offline doctor smoke test failed.'
     }
     foreach ($checkName in @('network', 'stable_token', 'ip_allowlist', 'draft_permission', 'published_permission')) {
         $checks = @($doctor.data.checks | Where-Object { $_.name -eq $checkName })
@@ -193,15 +219,16 @@ function Test-ReleaseDirectory([string]$Directory) {
     return $releaseVersion
 }
 
-function Install-AgentSkill([string]$Source, [string]$ReleaseVersion) {
+function Install-AgentSkill([string]$SkillName, [string]$Source, [string]$ReleaseVersion) {
     if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
-        throw "The wxcli Skill source does not exist: $Source"
+        throw "The $SkillName Skill source does not exist: $Source"
     }
     New-Item -ItemType Directory -Path $agentSkillsRoot -Force | Out-Null
-    Remove-SafeInstalledSkillDirectory
-    Copy-DirectoryContents $Source $installedSkillDirectory
+    Remove-SafeInstalledSkillDirectory $SkillName
+    $installedDirectory = $installedSkillDirectories[$SkillName]
+    Copy-DirectoryContents $Source $installedDirectory
     [System.IO.File]::WriteAllText(
-        (Join-Path $installedSkillDirectory '.wxcli-version'),
+        (Join-Path $installedDirectory ".$SkillName-version"),
         "$ReleaseVersion`n",
         $utf8NoBom
     )
@@ -211,17 +238,30 @@ function Snapshot-And-InstallAgentSkill([string]$ReleaseVersion) {
     New-Item -ItemType Directory -Path $skillSnapshotsRoot -Force | Out-Null
     $snapshotDirectory = Join-Path $skillSnapshotsRoot $ReleaseVersion
     Remove-SafeInstallDirectory $snapshotDirectory
-    Copy-DirectoryContents $sourceSkillDirectory $snapshotDirectory
-    Install-AgentSkill $sourceSkillDirectory $ReleaseVersion
+    New-Item -ItemType Directory -Path $snapshotDirectory -Force | Out-Null
+    foreach ($skillName in $sourceSkillDirectories.Keys) {
+        $source = $sourceSkillDirectories[$skillName]
+        Copy-DirectoryContents $source (Join-Path $snapshotDirectory $skillName)
+        Install-AgentSkill $skillName $source $ReleaseVersion
+    }
 }
 
 function Restore-AgentSkill([string]$ReleaseVersion) {
     $snapshotDirectory = Join-Path $skillSnapshotsRoot $ReleaseVersion
     if (-not (Test-Path -LiteralPath $snapshotDirectory -PathType Container)) {
-        $warnings.Add("The Agent Skill snapshot for wxcli $ReleaseVersion is missing; the installed Skill was left unchanged.")
+        $warnings.Add("The Agent Skill snapshot for WeChat OA $ReleaseVersion is missing; the installed Skills were left unchanged.")
         return $false
     }
-    Install-AgentSkill $snapshotDirectory $ReleaseVersion
+    $canonicalSnapshot = Join-Path $snapshotDirectory 'wechat-oa'
+    $compatibilitySnapshot = Join-Path $snapshotDirectory 'wxcli'
+    if (Test-Path -LiteralPath $canonicalSnapshot -PathType Container) {
+        Install-AgentSkill 'wechat-oa' $canonicalSnapshot $ReleaseVersion
+        Install-AgentSkill 'wxcli' $compatibilitySnapshot $ReleaseVersion
+    }
+    else {
+        Remove-SafeInstalledSkillDirectory 'wechat-oa'
+        Install-AgentSkill 'wxcli' $snapshotDirectory $ReleaseVersion
+    }
     return $true
 }
 
@@ -318,7 +358,14 @@ function Invoke-AtomicSwap {
 }
 
 function Invoke-Install([string]$RequestedVersion) {
-    $sourceDirectory = Join-Path $distRoot "wxcli-$RequestedVersion-windows-x64"
+    $canonicalSourceDirectory = Join-Path $distRoot "wechat-oa-$RequestedVersion-windows-x64"
+    $legacySourceDirectory = Join-Path $distRoot "wxcli-$RequestedVersion-windows-x64"
+    $sourceDirectory = if (Test-Path -LiteralPath $canonicalSourceDirectory -PathType Container) {
+        $canonicalSourceDirectory
+    }
+    else {
+        $legacySourceDirectory
+    }
     if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
         throw "The release source directory does not exist: $sourceDirectory"
     }

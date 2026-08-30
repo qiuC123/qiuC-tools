@@ -15,11 +15,13 @@ if ([string]::IsNullOrWhiteSpace($PersonalSkillsRoot)) {
     $PersonalSkillsRoot = Join-Path $userProfilePath ".agents\skills"
 }
 
-$sourceSkill = Join-Path $repoRoot "skills\wxcli"
+$sourceSkill = Join-Path $repoRoot "skills\wechat-oa"
+$sourceCompatibilitySkill = Join-Path $repoRoot "skills\wxcli"
 $sourceChannel = Join-Path $repoRoot "integrations\agent-reach\wechat.py"
 $sourceReference = Join-Path $repoRoot "integrations\agent-reach\wechat.md"
 $requiredFiles = @(
     (Join-Path $sourceSkill "SKILL.md"),
+    (Join-Path $sourceCompatibilitySkill "SKILL.md"),
     $sourceChannel,
     $sourceReference,
     $AgentReachPython
@@ -68,9 +70,10 @@ function Add-AgentReachSkillRoute([string]$SkillRoot) {
         }
         $content = $content.Replace($anchor, "$routeRow`r`n$anchor")
     }
-    $referenceLine = "- [微信公众号](references/wechat.md) — wxcli 文章读取和经确认的 Word 草稿导入"
+    $referenceLine = "- [微信公众号](references/wechat.md) — WeChat OA 文章发现、读取和安全草稿准备"
+    $currentReferenceLine = "- [微信公众号](references/wechat.md) — wxcli 文章读取和经确认的 Word 草稿导入"
     $legacyReferenceLine = "- [微信公众号](references/wechat.md) — wxcli 只读文章、草稿和已发布内容"
-    $content = $content.Replace($legacyReferenceLine, $referenceLine)
+    $content = $content.Replace($currentReferenceLine, $referenceLine).Replace($legacyReferenceLine, $referenceLine)
     if (-not $content.Contains($referenceLine)) {
         $anchor = "- [网页阅读](references/web.md) — Jina Reader, RSS"
         if (-not $content.Contains($anchor)) {
@@ -82,10 +85,23 @@ function Add-AgentReachSkillRoute([string]$SkillRoot) {
     Write-Utf8NoBom -Path $skillPath -Content $content
 }
 
+function Install-PersonalSkill([string]$Name, [string]$Source) {
+    $target = Join-Path $PersonalSkillsRoot $Name
+    $resolvedTarget = [System.IO.Path]::GetFullPath($target)
+    $expectedTarget = [System.IO.Path]::GetFullPath((Join-Path $PersonalSkillsRoot $Name))
+    if (-not $resolvedTarget.Equals($expectedTarget, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to replace an unexpected Skill path: $resolvedTarget"
+    }
+    if (Test-Path -LiteralPath $resolvedTarget) {
+        Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+    }
+    Copy-Item -LiteralPath $Source -Destination $resolvedTarget -Recurse
+    return $resolvedTarget
+}
+
 New-Item -ItemType Directory -Path $PersonalSkillsRoot -Force | Out-Null
-$personalSkillTarget = Join-Path $PersonalSkillsRoot "wxcli"
-New-Item -ItemType Directory -Path $personalSkillTarget -Force | Out-Null
-Copy-Item -Path (Join-Path $sourceSkill "*") -Destination $personalSkillTarget -Recurse -Force
+$personalSkillTarget = Install-PersonalSkill -Name "wechat-oa" -Source $sourceSkill
+$compatibilitySkillTarget = Install-PersonalSkill -Name "wxcli" -Source $sourceCompatibilitySkill
 
 $registryBackup = "$registryPath.wxcli-backup"
 if (-not (Test-Path -LiteralPath $registryBackup)) {
@@ -122,6 +138,7 @@ $activeAgentReachSkill = Join-Path $PersonalSkillsRoot "agent-reach"
 Add-AgentReachSkillRoute -SkillRoot $activeAgentReachSkill
 Add-AgentReachSkillRoute -SkillRoot (Join-Path $packageRoot "skill")
 
-Write-Output "Installed wxcli skill: $personalSkillTarget"
+Write-Output "Installed WeChat OA skill: $personalSkillTarget"
+Write-Output "Installed wxcli compatibility skill: $compatibilitySkillTarget"
 Write-Output "Registered Agent Reach channel: $channelTarget"
 Write-Output "Patched Agent Reach routing references."

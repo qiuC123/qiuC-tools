@@ -13,6 +13,8 @@ def test_source_and_package_versions_match() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["version"] == __version__
+    assert project["project"]["scripts"]["wechat-oa"] == "wxcli.cli:main"
+    assert project["project"]["scripts"]["wxcli"] == "wxcli.cli:main"
 
 
 def test_release_is_windows_x64_onedir_zip_with_checksum() -> None:
@@ -26,6 +28,9 @@ def test_release_is_windows_x64_onedir_zip_with_checksum() -> None:
     assert "SHA256" in script
     assert "status --porcelain" in script
     assert "PowerShell 7" in script
+    assert '--name wechat-oa' in script
+    assert "'wechat-oa.exe'" in script
+    assert "'wxcli.exe'" in script
 
 
 def test_release_contains_install_and_cleanup_guidance() -> None:

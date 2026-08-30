@@ -431,7 +431,7 @@ class WordDraftImporter:
         return (
             "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            "<title>wxcli draft preview</title></head>"
+            "<title>WeChat OA draft preview</title></head>"
             '<body style="margin:0;background:#f2f2f2;">'
             '<main style="box-sizing:border-box;max-width:677px;margin:0 auto;'
             'padding:28px 20px 60px;background:#ffffff;">'

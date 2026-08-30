@@ -1,4 +1,4 @@
 interface:
-  display_name: "wxcli"
-  short_description: "通过 wxcli 安全读取微信公众号文章、草稿和已发布内容"
-  default_prompt: "使用 $wxcli 读取这个微信公众号链接并返回结构化结果。"
+  display_name: "wxcli（兼容）"
+  short_description: "旧名称兼容入口；新任务使用 WeChat OA"
+  default_prompt: "将这个旧 wxcli 请求迁移到 $wechat-oa 并保持兼容。"

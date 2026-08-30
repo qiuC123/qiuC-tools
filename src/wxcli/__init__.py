@@ -1,3 +1,3 @@
-"""wxcli: Windows WeChat content access and explicitly planned draft changes."""
+"""WeChat OA: Windows Official Account content access and planned draft changes."""
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"

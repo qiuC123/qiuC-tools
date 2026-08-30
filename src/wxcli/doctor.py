@@ -1,4 +1,4 @@
-"""Offline-by-default environment diagnostics for wxcli."""
+"""Offline-by-default environment diagnostics for WeChat OA."""
 
 from __future__ import annotations
 
@@ -119,12 +119,12 @@ class Doctor:
             return DoctorCheck(
                 name="runtime_directory",
                 status="fail",
-                message="The wxcli runtime directory is not writable.",
+                message="The WeChat OA runtime directory is not writable.",
             )
         return DoctorCheck(
             name="runtime_directory",
             status="pass",
-            message="The wxcli runtime directory is writable.",
+            message="The WeChat OA runtime directory is writable.",
         )
 
     def _profile_lock(self) -> DoctorCheck:
@@ -135,18 +135,18 @@ class Doctor:
             return DoctorCheck(
                 name="profile_lock",
                 status="warn",
-                message="The wxcli Chrome profile is currently locked.",
+                message="The WeChat OA Chrome profile is currently locked.",
             )
         except OSError:
             return DoctorCheck(
                 name="profile_lock",
                 status="fail",
-                message="The wxcli Chrome profile lock cannot be created.",
+                message="The WeChat OA Chrome profile lock cannot be created.",
             )
         return DoctorCheck(
             name="profile_lock",
             status="pass",
-            message="The wxcli Chrome profile lock is available.",
+            message="The WeChat OA Chrome profile lock is available.",
         )
 
     def _live_checks(self, appid: str) -> list[DoctorCheck]:

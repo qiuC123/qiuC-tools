@@ -1,8 +1,8 @@
-# Approved wxcli Windows V1 Design
+# Approved WeChat OA Windows V1 Design
 
 ## Purpose and scope
 
-wxcli is a Windows x64 command-line tool for discovering and reading WeChat Official Account content and, under the approved V2 extension below, explicitly creating one new unpublished draft from Word. Its command groups include `article`, `discovery`, `account`, `auth`, `browser`, `cache`, and `doctor`; `--version` reports its version. The tool never publishes, mass-sends, deletes, bypasses verification, or exports cookies.
+WeChat OA is a Windows x64 command-line tool for discovering and reading WeChat Official Account content and, under the approved V2 extension below, explicitly creating one new unpublished draft from Word. Its command groups include `article`, `discovery`, `account`, `auth`, `browser`, `cache`, and `doctor`; `--version` reports its version. The tool never publishes, mass-sends, deletes, bypasses verification, or exports cookies.
 
 ## Runtime and distribution
 
@@ -22,4 +22,4 @@ Only `https://mp.weixin.qq.com/s/<token>` and `https://mp.weixin.qq.com/s?__biz=
 
 ## Approved V2 draft-import extension
 
-wxcli may map a local Word `.docx` and a separate cover image into WeChat-safe HTML, preserve supported document structure and image order, compress copies to documented WeChat limits, and generate a local preview without network access. A separate explicit `--confirm` action may upload those prepared images and create one new unpublished draft. Existing drafts can only be replaced through the backup → diff/frozen plan → separately confirmed update workflow in ADR-0003, with remote-fingerprint rechecks and post-write readback. Providers remain read-only, and wxcli still does not publish, delete, comment, mass-send, bypass verification, or expose credentials.
+WeChat OA may map a local Word `.docx` and a separate cover image into WeChat-safe HTML, preserve supported document structure and image order, compress copies to documented WeChat limits, and generate a local preview without network access. A separate explicit `--confirm` action may upload those prepared images and create one new unpublished draft. Existing drafts can only be replaced through the backup → diff/frozen plan → separately confirmed update workflow in ADR-0003, with remote-fingerprint rechecks and post-write readback. Providers remain read-only, and WeChat OA still does not publish, delete, comment, mass-send, bypass verification, or expose credentials.

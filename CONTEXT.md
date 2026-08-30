@@ -1,6 +1,12 @@
-# wxcli Content Access
+# WeChat Official Account Content Access
 
-This context names the information wxcli discovers and reads from public WeChat pages, local files, and explicitly authorized Official Account APIs, plus narrowly scoped creation and safe replacement of unpublished drafts. It excludes publishing, account administration, company recruitment modeling, and non-WeChat website retrieval.
+This context names the information WeChat OA discovers and reads from public WeChat pages, local files, and explicitly authorized Official Account APIs, plus narrowly scoped creation and safe replacement of unpublished drafts. It excludes publishing, account administration, company recruitment modeling, and non-WeChat website retrieval.
+
+## Product
+
+**WeChat OA**:
+The product dedicated to discovering, reading, and safely preparing content for WeChat Official Accounts.
+_Avoid_: wxcli, WeChat client, WeChat automation
 
 ## Content
 
@@ -35,7 +41,7 @@ A source result meaning WeChat requires human browser verification before conten
 _Avoid_: captcha failure, anti-bot workaround
 
 **Browser Session**:
-Browser-owned WeChat session state retained in one independent wxcli profile across Browser Runs without exposing its underlying Cookies.
+Browser-owned WeChat session state retained in one independent WeChat OA profile across Browser Runs without exposing its underlying Cookies.
 _Avoid_: Cookie configuration, imported login, browser token
 
 **Browser Run**:
@@ -53,23 +59,23 @@ _Avoid_: automatic CAPTCHA handling, indefinite wait, parse failure
 ## Discovery and evidence
 
 **Discovery Provider**:
-A read-only adapter used by wxcli during Direct Discovery to find possible Public URLs without reading or validating their article content.
+A read-only adapter used by WeChat OA during Direct Discovery to find possible Public URLs without reading or validating their article content.
 _Avoid_: Content Provider, WeChat index, scraper
 
 **Search Orchestrator**:
-An external agent that chooses search strategies and submits possible Public URLs to wxcli without claiming that they are readable or trustworthy Articles.
+An external agent that chooses search strategies and submits possible Public URLs to WeChat OA without claiming that they are readable or trustworthy Articles.
 _Avoid_: Discovery Provider, Content Provider, evidence generator
 
 **External Discovery Provider**:
-A search service used by a Search Orchestrator outside wxcli to find possible Public URLs.
+A search service used by a Search Orchestrator outside WeChat OA to find possible Public URLs.
 _Avoid_: Discovery Provider, Content Provider, WeChat index
 
 **Direct Discovery**:
-Discovery initiated by wxcli through a Discovery Provider.
+Discovery initiated by WeChat OA through a Discovery Provider.
 _Avoid_: Agent-Orchestrated Discovery, Hydration
 
 **Agent-Orchestrated Discovery**:
-Discovery initiated by a Search Orchestrator through one or more External Discovery Providers, then handed to wxcli as a Candidate Batch.
+Discovery initiated by a Search Orchestrator through one or more External Discovery Providers, then handed to WeChat OA as a Candidate Batch.
 _Avoid_: Direct Discovery, Article Evidence
 
 **Discovery Query**:
@@ -81,11 +87,11 @@ A strictly validated Public URL accepted through Direct Discovery or Candidate I
 _Avoid_: Article, search result article, verified result
 
 **Candidate Batch**:
-A bounded collection of untrusted possible Public URLs and search hints submitted by a Search Orchestrator for wxcli validation and optional Hydration.
+A bounded collection of untrusted possible Public URLs and search hints submitted by a Search Orchestrator for WeChat OA validation and optional Hydration.
 _Avoid_: Article Evidence, search response, recruitment batch
 
 **Candidate Ingestion**:
-The boundary where wxcli validates, normalizes, deduplicates, and records a Candidate Batch without trusting its search hints as WeChat source facts.
+The boundary where WeChat OA validates, normalizes, deduplicates, and records a Candidate Batch without trusting its search hints as WeChat source facts.
 _Avoid_: Hydration, import Article, evidence creation
 
 **Hydration**:
@@ -113,7 +119,7 @@ A continuation value for repeating the same Discovery Query while identifying ca
 _Avoid_: Search Cursor, permanent business state
 
 **External Link Handoff**:
-An external URL observed in Article Evidence and passed to a caller without wxcli visiting, classifying as a recruitment channel, or operating the destination.
+An external URL observed in Article Evidence and passed to a caller without WeChat OA visiting, classifying as a recruitment channel, or operating the destination.
 _Avoid_: website crawl, application channel, verified job link
 
 **Media Analysis**:
@@ -129,7 +135,7 @@ The download and analysis outcome for one image occurrence in an Article, preser
 _Avoid_: image file, Article image URL, OCR document
 
 **QR Evidence**:
-An inert decoded payload and type observation from an eligible image. wxcli records it but never opens, executes, follows, or treats it as browser authorization.
+An inert decoded payload and type observation from an eligible image. WeChat OA records it but never opens, executes, follows, or treats it as browser authorization.
 _Avoid_: application link, verified destination, QR action
 
 **OCR Evidence**:

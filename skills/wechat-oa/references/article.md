@@ -12,13 +12,13 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 默认先使用 HTTP Provider：
 
 ```powershell
-wxcli --json article get "URL"
+wechat-oa --json article get "URL"
 ```
 
 需要实时绕过成功缓存时，使用：
 
 ```powershell
-wxcli --json article get "URL" --no-cache
+wechat-oa --json article get "URL" --no-cache
 ```
 
 `--no-cache` 同时禁止读写缓存。缓存只保存公共 URL 的成功结果，默认 TTL
@@ -30,28 +30,28 @@ wxcli --json article get "URL" --no-cache
 解析器崩溃。只有用户明确授权打开浏览器后，才能直接执行：
 
 ```powershell
-wxcli --json article get "URL" --browser
+wechat-oa --json article get "URL" --browser
 ```
 
 希望仍然先尝试 HTTP、仅在验证页后启动一次可见 Chrome 时，使用：
 
 ```powershell
-wxcli --json article get "URL" --browser-fallback
+wechat-oa --json article get "URL" --browser-fallback
 ```
 
 `--no-browser` 会禁止本次调用使用 Chrome，即使用户级长期策略已经设为
 `auto-fallback`。长期策略默认是 `never`。
 
 如果可见 Chrome 中出现扫码、滑块或确认页面，让用户手工完成。禁止自动破解或
-绕过验证。wxcli 使用独立持久 profile，不使用或导出用户日常 Chrome Cookie。
+绕过验证。wechat-oa 使用独立持久 profile，不使用或导出用户日常 Chrome Cookie。
 
 ## 本地文件
 
 读取 UTF-8 HTML 或 Markdown：
 
 ```powershell
-wxcli --json article local "C:\path\article.html"
-wxcli --json article local "C:\path\article.md"
+wechat-oa --json article local "C:\path\article.html"
+wechat-oa --json article local "C:\path\article.md"
 ```
 
 ## Article 结果

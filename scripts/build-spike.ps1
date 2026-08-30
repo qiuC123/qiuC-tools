@@ -7,7 +7,7 @@ $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
     --noconfirm `
     --clean `
     --onedir `
-    --name wxcli `
+    --name wechat-oa `
     --paths (Join-Path $projectRoot 'src') `
     --collect-submodules playwright `
     --distpath (Join-Path $projectRoot 'dist\spike') `

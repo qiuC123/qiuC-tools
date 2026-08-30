@@ -101,7 +101,7 @@ Assert-LastCommand 'Version lookup'
 if ($version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Unsupported release version: $version"
 }
-$artifactName = "wxcli-$version-windows-x64"
+$artifactName = "wechat-oa-$version-windows-x64"
 $artifactDirectory = Join-Path $distRoot $artifactName
 $zipPath = Join-Path $distRoot "$artifactName.zip"
 $checksumPath = "$zipPath.sha256"
@@ -139,7 +139,7 @@ Assert-LastCommand 'PyInstaller installation'
     --noconfirm `
     --clean `
     --onedir `
-    --name wxcli `
+    --name wechat-oa `
     --paths (Join-Path $projectRoot 'src') `
     --collect-all playwright `
     --collect-submodules keyring.backends `
@@ -151,8 +151,9 @@ Assert-LastCommand 'PyInstaller installation'
     (Join-Path $projectRoot 'src\wxcli\__main__.py')
 Assert-LastCommand 'PyInstaller onedir build'
 
-Move-Item -LiteralPath (Join-Path $stagingRoot 'wxcli') -Destination $artifactDirectory
+Move-Item -LiteralPath (Join-Path $stagingRoot 'wechat-oa') -Destination $artifactDirectory
 Remove-SafeProjectDirectory $stagingRoot
+Copy-Item -LiteralPath (Join-Path $artifactDirectory 'wechat-oa.exe') -Destination (Join-Path $artifactDirectory 'wxcli.exe')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $artifactDirectory
 Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $artifactDirectory
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs\release-windows.md') -Destination (Join-Path $artifactDirectory 'INSTALL.md')
@@ -163,19 +164,25 @@ $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
     $utf8NoBom
 )
 
-$script:executable = Join-Path $artifactDirectory 'wxcli.exe'
+$script:executable = Join-Path $artifactDirectory 'wechat-oa.exe'
 $plainVersion = Invoke-PackagedWxcli @('--version')
 if ($plainVersion.Stdout.Trim() -ne $version -or -not [string]::IsNullOrEmpty($plainVersion.Stderr)) {
-    throw 'Packaged wxcli version smoke test failed.'
+    throw 'Packaged WeChat OA version smoke test failed.'
 }
 $jsonVersion = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', '--version'))
 if (-not $jsonVersion.ok -or $jsonVersion.data.version -ne $version) {
-    throw 'Packaged wxcli JSON version smoke test failed.'
+    throw 'Packaged WeChat OA JSON version smoke test failed.'
 }
+$script:executable = Join-Path $artifactDirectory 'wxcli.exe'
+$legacyVersion = Invoke-PackagedWxcli @('--version')
+if ($legacyVersion.Stdout.Trim() -ne $version -or -not [string]::IsNullOrEmpty($legacyVersion.Stderr)) {
+    throw 'Packaged wxcli compatibility command smoke test failed.'
+}
+$script:executable = Join-Path $artifactDirectory 'wechat-oa.exe'
 $help = Invoke-PackagedWxcli @('--help')
 foreach ($command in @('article', 'account', 'auth', 'browser', 'cache', 'discovery', 'doctor')) {
     if ($help.Stdout -notmatch "\b$command\b") {
-        throw "Packaged wxcli help is missing command: $command"
+        throw "Packaged WeChat OA help is missing command: $command"
     }
 }
 $smokeArticle = Join-Path $buildRoot 'smoke-article.md'
@@ -184,17 +191,17 @@ $localArticle = ConvertFrom-SingleJson (
     Invoke-PackagedWxcli @('--json', 'article', 'local', $smokeArticle)
 )
 if (-not $localArticle.ok -or $localArticle.data.title -ne '打包冒烟') {
-    throw 'Packaged wxcli local article smoke test failed.'
+    throw 'Packaged WeChat OA local article smoke test failed.'
 }
 $invalidInput = ConvertFrom-SingleJson (
     Invoke-PackagedWxcli @('--json', 'article', 'local') @(2)
 )
 if ($invalidInput.ok -or $invalidInput.error.code -ne 'INVALID_ARGUMENT') {
-    throw 'Packaged wxcli invalid-argument smoke test failed.'
+    throw 'Packaged WeChat OA invalid-argument smoke test failed.'
 }
 $authStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'auth', 'status'))
 if (-not $authStatus.ok) {
-    throw 'Packaged wxcli keyring smoke test failed.'
+    throw 'Packaged WeChat OA keyring smoke test failed.'
 }
 $discoveryHelp = Invoke-PackagedWxcli @('discovery', '--help')
 foreach ($command in @('search', 'hydrate', 'auth', 'cache')) {

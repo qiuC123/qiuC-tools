@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wxcli"
-version = "0.5.0"
-description = "Windows CLI for discovering and reading WeChat content and safely planning draft changes"
+version = "0.5.1"
+description = "Windows CLI for WeChat Official Account discovery, evidence, and safe draft preparation"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
-authors = [{ name = "wxcli contributors" }]
+authors = [{ name = "WeChat OA contributors" }]
 dependencies = [
     "typer>=0.12,<1.0",
     "pydantic>=2.7,<3.0",
@@ -33,6 +33,7 @@ dev = [
 
 [project.scripts]
 wxcli = "wxcli.cli:main"
+wechat-oa = "wxcli.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

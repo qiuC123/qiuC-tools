@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""WeChat Official Account articles — wxcli channel for Agent Reach."""
+"""WeChat Official Account articles — WeChat OA channel for Agent Reach."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from .base import Channel
 
 
 class WeChatChannel(Channel):
-    """Detect supported public article URLs and verify the wxcli executable."""
+    """Detect supported public article URLs and verify the WeChat OA executable."""
 
     name = "wechat"
     description = "微信公众号文章"
-    backends = ["wxcli"]
+    backends = ["wechat-oa", "wxcli"]
     tier = 0
 
     def can_handle(self, url: str) -> bool:
@@ -50,20 +50,24 @@ class WeChatChannel(Channel):
 
     def check(self, config=None):
         self.active_backend = None
-        probe = probe_command(
-            "wxcli",
-            ["--version"],
-            timeout=10,
-            package="wxcli",
-        )
-        if probe.status == "missing":
-            return "warn", "wxcli 未安装或不在 PATH；请安装 Windows x64 发布包并将其目录加入 PATH"
-        if probe.status == "broken":
-            return "error", "wxcli 命令存在但无法执行；请重新安装 Windows x64 发布包"
-        if not probe.ok:
-            detail = probe.hint or probe.status
-            return "error", f"wxcli 版本检查失败：{detail}"
+        for command in self.backends:
+            probe = probe_command(
+                command,
+                ["--version"],
+                timeout=10,
+                package="wxcli",
+            )
+            if probe.status == "missing":
+                continue
+            if probe.status == "broken":
+                return "error", f"{command} 命令存在但无法执行；请重新安装 WeChat OA Windows x64 发布包"
+            if not probe.ok:
+                detail = probe.hint or probe.status
+                return "error", f"{command} 版本检查失败：{detail}"
 
-        self.active_backend = self.backends[0]
-        version = probe.output.strip() or "未知版本"
-        return "ok", f"wxcli 可用（{version}，Windows 微信公众号后端）"
+            self.active_backend = command
+            version = probe.output.strip() or "未知版本"
+            suffix = "" if command == "wechat-oa" else "；当前使用 wxcli 兼容命令"
+            return "ok", f"WeChat OA 可用（{version}，Windows 微信公众号后端{suffix}）"
+
+        return "warn", "WeChat OA 未安装或不在 PATH；请安装 Windows x64 发布包并将其目录加入 PATH"

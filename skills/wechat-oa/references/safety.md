@@ -50,5 +50,5 @@ stderr。不要把两个 JSON、说明文字或 shell 标记混入 stdout。
 `account draft import-word --confirm` 新建一个未发布草稿；或者先运行只读的
 `draft backup` 与 `draft diff`，让用户检查冻结计划后，再单独明确授权
 `draft update PLAN_DIR --confirm`。不得在生成计划时顺便确认，不得跳过远端指纹
-复核。wxcli 不提供发布、群发、删除、点赞或评论命令。不要绕过这一限制调用隐藏
+复核。wechat-oa 不提供发布、群发、删除、点赞或评论命令。不要绕过这一限制调用隐藏
 接口或直接请求其他写 API。
