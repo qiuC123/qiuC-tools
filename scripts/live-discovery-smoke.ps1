@@ -26,8 +26,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "The selected wxcli executable could not report its version: $WxcliPath"
 }
 $versionMatch = [regex]::Match($versionOutput, '(?<version>\d+\.\d+\.\d+)')
-if (-not $versionMatch.Success -or [version]$versionMatch.Groups['version'].Value -lt [version]'0.4.0') {
-    throw "Live discovery smoke requires wxcli 0.4.0 or newer; selected executable reported: $versionOutput"
+if (-not $versionMatch.Success -or [version]$versionMatch.Groups['version'].Value -lt [version]'0.5.0') {
+    throw "Live discovery smoke requires wxcli 0.5.0 or newer; selected executable reported: $versionOutput"
 }
 
 $arguments = @('--json', 'discovery', 'search', $Query, '--limit', '5')
@@ -35,7 +35,7 @@ if ($AllowLiveWeChat) {
     $arguments += @('--hydrate', '--priority-hydrate', '3', '--max-hydrate', '3')
 }
 if ($AllowBrowser) {
-    $arguments += '--browser'
+    $arguments += '--browser-fallback'
 }
 
 $output = & $WxcliPath @arguments

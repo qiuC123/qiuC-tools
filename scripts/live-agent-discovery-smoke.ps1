@@ -32,8 +32,8 @@ if ($AllowLiveWeChat) {
         throw "The selected wxcli executable could not report its version: $WxcliPath"
     }
     $versionMatch = [regex]::Match($wxcliVersionOutput, '(?<version>\d+\.\d+\.\d+)')
-    if (-not $versionMatch.Success -or [version]$versionMatch.Groups['version'].Value -lt [version]'0.4.0') {
-        throw "Agent-first smoke requires wxcli 0.4.0 or newer; selected executable reported: $wxcliVersionOutput"
+    if (-not $versionMatch.Success -or [version]$versionMatch.Groups['version'].Value -lt [version]'0.5.0') {
+        throw "Agent-first smoke requires wxcli 0.5.0 or newer; selected executable reported: $wxcliVersionOutput"
     }
 }
 
@@ -181,7 +181,7 @@ Use priority_count 10 and maximum_attempts 20.
 
     $arguments = @('--json', 'discovery', 'hydrate', '--input', $batchPath)
     if ($AllowBrowser) {
-        $arguments += '--browser'
+        $arguments += '--browser-fallback'
     }
     $wxcliOutput = & $WxcliPath @arguments
     if ($LASTEXITCODE -ne 0) {

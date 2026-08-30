@@ -52,6 +52,7 @@ function Invoke-PackagedWxcli([string[]]$CliArguments, [int[]]$ExpectedExitCodes
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
+    $start.Environment['LOCALAPPDATA'] = (Join-Path $buildRoot 'smoke-localappdata')
     foreach ($argument in $CliArguments) {
         $start.ArgumentList.Add($argument)
     }
@@ -210,6 +211,12 @@ if (-not $discoveryAuthStatus.ok) {
 $browserStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'browser', 'status'))
 if (-not $browserStatus.ok) {
     throw 'Packaged wxcli browser status smoke test failed.'
+}
+$browserPolicyStatus = ConvertFrom-SingleJson (
+    Invoke-PackagedWxcli @('--json', 'browser', 'policy', 'status')
+)
+if (-not $browserPolicyStatus.ok -or $browserPolicyStatus.data.policy -ne 'never') {
+    throw 'Packaged wxcli browser policy smoke test failed.'
 }
 $doctor = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'doctor') @(0, 1))
 $liveChecks = @($doctor.data.checks | Where-Object { $_.name -in @('network', 'stable_token', 'ip_allowlist', 'draft_permission', 'published_permission') })

@@ -34,6 +34,7 @@ def test_release_contains_install_and_cleanup_guidance() -> None:
     assert "安装" in instructions
     assert "SHA-256" in instructions
     assert "browser clear" in instructions
+    assert "browser policy set never" in instructions
     assert "cache clear" in instructions
     assert "凭据管理器" in instructions
 
@@ -42,7 +43,7 @@ def test_live_smoke_requires_explicit_flags_and_a_discovery_capable_executable()
     script = (ROOT / "scripts" / "live-discovery-smoke.ps1").read_text(encoding="utf-8")
 
     assert "$WxcliPath" in script
-    assert "0.4.0" in script
+    assert "0.5.0" in script
     assert "AllowLiveSearch" in script
     assert "AllowLiveWeChat" in script
     assert "AllowBrowser" in script
@@ -61,7 +62,7 @@ def test_agent_first_live_smoke_keeps_search_wechat_and_browser_authority_separa
     assert "-o $batchPath -" in script
     assert "$batch.discovery_request.query -ne $Query" in script
     assert "discovery', 'hydrate" in script
-    assert "0.4.0" in script
+    assert "0.5.0" in script
     assert "api_key" not in script.casefold()
 
 
@@ -69,3 +70,5 @@ def test_packaged_discovery_help_includes_candidate_hydration() -> None:
     script = (ROOT / "scripts" / "build-release.ps1").read_text(encoding="utf-8")
 
     assert "'search', 'hydrate', 'auth', 'cache'" in script
+    assert "browser', 'policy', 'status'" in script
+    assert "smoke-localappdata" in script

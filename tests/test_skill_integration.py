@@ -97,6 +97,9 @@ def test_wxcli_skill_contains_required_contracts() -> None:
     assert "wxcli --json discovery hydrate" in skill
     assert "VERIFICATION_REQUIRED" in skill
     assert "explicitly authorizes browser mode" in skill
+    assert "--browser-fallback" in skill
+    assert "--no-browser" in skill
+    assert "browser policy set auto-fallback" in skill
     assert "images[]" in skill
     assert "import-word --confirm" in skill
     assert "未发布草稿" in references
@@ -104,3 +107,5 @@ def test_wxcli_skill_contains_required_contracts() -> None:
     assert "绕过验证" in references
     assert "article_identity" in references
     assert "不是微信官方或全量索引" in references
+    assert "last_successful_read_at" in references
+    assert "BROWSER_BUSY" in references

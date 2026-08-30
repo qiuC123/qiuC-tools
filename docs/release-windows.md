@@ -5,8 +5,8 @@
 1. 校验下载的 ZIP：
 
    ```powershell
-   Get-FileHash .\wxcli-0.4.0-windows-x64.zip -Algorithm SHA256
-   Get-Content .\wxcli-0.4.0-windows-x64.zip.sha256
+   Get-FileHash .\wxcli-0.5.0-windows-x64.zip -Algorithm SHA256
+   Get-Content .\wxcli-0.5.0-windows-x64.zip.sha256
    ```
 
    两处 SHA-256 应完全相同。
@@ -15,7 +15,7 @@
 3. 在仓库根目录运行安装脚本：
 
    ```powershell
-   pwsh .\scripts\install-release.ps1 -Version 0.4.0
+   pwsh .\scripts\install-release.ps1 -Version 0.5.0
    ```
 
    脚本先把完整产物复制到临时目录并完成离线冒烟测试，然后通过同一 NTFS 卷内的目录改名切换版本。安装位置固定为：
@@ -63,7 +63,7 @@ pwsh .\scripts\install-release.ps1
 
 脚本在 `current.new` 完成复制和离线冒烟测试。通过后，原 `current` 政名为 `previous`，`current.new` 再改名为 `current`；任何时候都不在服役目录中原地覆盖文件。如果最后一次改名失败，脚本会把 `previous` 自动恢复为 `current`。
 
-只保留一个 `previous`：再次安装新版本时，原有 `previous` 会先删除，当前服役版本成为新的 `previous`。运行状态仍保存在 `%LOCALAPPDATA%\wxcli`，不会因为程序目录切换而丢失。
+只保留一个 `previous`：再次安装新版本时，原有 `previous` 会先删除，当前服役版本成为新的 `previous`。运行状态仍保存在 `%LOCALAPPDATA%\wxcli`，不会因为程序目录切换而丢失。0.5.0 的 `browser-policy.json` 与独立 Chrome profile 也位于这里；回滚到 0.4.0 时旧程序会忽略策略文件，再滚回 0.5.0 后继续使用。
 
 ## 回滚
 
@@ -88,6 +88,9 @@ wxcli discovery cache clear
 
 # 删除 wxcli 专用 Chrome profile 和本地浏览器状态
 wxcli browser clear
+
+# 撤销持久浏览器自动回退授权；browser clear 不会替你修改策略
+wxcli browser policy set never
 ```
 
 随后可以删除 `%LOCALAPPDATA%\Programs\wxcli`，并从用户级 PATH 人工删除 `%LOCALAPPDATA%\Programs\wxcli\current`。如不再需要 Agent Skill，也可以删除 `%USERPROFILE%\.agents\skills\wxcli`。程序没有安装系统服务，也不会创建外部 Release。
