@@ -1,4 +1,30 @@
-# wxcli 项目交接说明
+# WeChat OA 项目交接说明
+
+## 0.5.1 命名更新（2026-08-30）
+
+产品正式命名为 **WeChat OA / 微信公众号助手**，首选 CLI 和 Agent Skill 标识均为 `wechat-oa`。旧 `wxcli` 可执行命令继续保留相同参数、JSON、退出码和运行状态；Python 包名、`%LOCALAPPDATA%\wxcli` 数据目录、Windows 凭据标识与历史证据 provenance 也保持不变。因此招聘雷达和既有自动化无需修改。
+
+本轮已完成：
+
+- 版本升至 0.5.1，Python 安装同时生成 `wechat-oa` 和 `wxcli` 两个命令。
+- Windows 发布目录同时包含 `wechat-oa.exe` 和 `wxcli.exe`；稳定安装根目录仍为 `%LOCALAPPDATA%\Programs\wxcli`。
+- 新增 canonical `wechat-oa` Skill；`wxcli` Skill 缩为兼容入口，并引导新任务使用 canonical Skill。
+- Agent Reach 微信渠道优先探测 `wechat-oa`，不存在时才回退到 `wxcli`。
+- 新增 ADR-0008，冻结产品名称及兼容边界。
+
+验证结果：
+
+```text
+pytest: 237 passed
+mypy: Success: no issues found in 36 source files
+Skill validation: wechat-oa and wxcli both valid
+Agent Reach doctor: wechat status ok, active_backend wechat-oa, version 0.5.1
+Recruitment Radar: unchanged WxCliClient reported (0, 5, 1) and completed schema-v1 empty-candidate hydration
+```
+
+正式 PyInstaller onedir 产物为 `dist\release\wechat-oa-0.5.1-windows-x64.zip`，SHA-256 为 `bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。安装 0.5.1、回滚到 0.5.0、再双向切回 0.5.1 均已验证；最终 `current` 为 0.5.1，`previous` 为 0.5.0，两个命令都返回 0.5.1，两个用户级 Skill 均已同步。
+
+0.5.1 只改变产品命名和分发入口，没有改变 0.5.0 的网络、浏览器、文章证据或草稿安全契约；下面保留 0.5.0 的真实外部验收记录。
 
 ## 0.5.0 开发更新（2026-08-30）
 
