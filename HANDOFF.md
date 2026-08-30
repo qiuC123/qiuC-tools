@@ -23,7 +23,9 @@ coverage: repository 88%; browser_policy 98%; hydration 96%; Chrome Provider 91%
 
 已完成 0.5.0 的独立 PyInstaller onedir 构建和脚本内置离线冒烟，产物为 `dist\release\wxcli-0.5.0-windows-x64.zip`，SHA-256 为 `41bd019295566279bb9a5356c88945aa319ca098c4fb7940002c98fc5de0ef00`。原子安装、回滚到 0.4.0、重新安装以及双向回滚均已成功，最终 `current` 为 0.5.0，`previous` 为 0.4.0。用户级 Skill 的 7 个仓库管理文件与源码哈希一致，安装目录另有 `.wxcli-version` 版本标记文件。
 
-`wxcli --json browser policy status` 已实际返回 `never / configured:false / valid:true`；策略文件不存在，因此当前使用安全缺省值。招聘雷达也已通过 PATH 实际启动 0.5.0 完成空候选、零网络的 schema-v1 管道验收。招聘雷达当前完整 477 项测试通过，660 秒 wxcli 等待上限已经包含在提交 `9d65d03 feat(radar): enforce official announcement admission` 中。尚未执行任何真实微信/Chrome live smoke，因此仍不能把本节理解为“0.5.0 live 验收已完成”。
+`wxcli --json browser policy status` 已实际返回 `never / configured:false / valid:true`；策略文件不存在，因此当前使用安全缺省值。招聘雷达也已通过 PATH 实际启动 0.5.0 完成空候选、零网络的 schema-v1 管道验收。招聘雷达当前完整 477 项测试通过，660 秒 wxcli 等待上限已经包含在提交 `9d65d03 feat(radar): enforce official announcement admission` 中。
+
+2026-08-30 已在用户明确授权后完成安装版 0.5.0 的真实 Agent-first / Exa / 微信 / Chrome 验收：外部搜索产生 18 个严格 Public URL 候选，wxcli 接受 18 个、尝试回读 17 个并验证成功 17 个，`partial:false`；批次使用 CLI 单次 `auto-fallback`，一个 Browser Run 回读 17 个候选，`user_action_required:0`。另用未回读候选验证单篇路径：`--no-browser` 正确以退出码 6 返回 `VERIFICATION_REQUIRED`，随后 `--browser-fallback` 以退出码 0 成功提取非空正文和图片。验收结束后无 wxcli Chrome 进程残留，长期策略仍为 `never / configured:false / valid:true`。真实 URL、标题和正文未写入 Git。
 
 ---
 
