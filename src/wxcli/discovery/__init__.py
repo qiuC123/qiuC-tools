@@ -2,6 +2,7 @@
 
 from wxcli.discovery.models import (
     ArticleCandidate,
+    BrowserFallbackSummary,
     DiscoveryRequest,
     DiscoveryResult,
     DiscoverySummary,
@@ -10,6 +11,7 @@ from wxcli.discovery.models import (
 
 __all__ = [
     "ArticleCandidate",
+    "BrowserFallbackSummary",
     "DiscoveryRequest",
     "DiscoveryResult",
     "DiscoverySummary",

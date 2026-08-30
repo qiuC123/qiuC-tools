@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from pydantic import HttpUrl
 
+from wxcli.browser_policy import BrowserDecision
 from wxcli.discovery.hydration import HydrationCoordinator
 from wxcli.discovery.identity import article_identity, query_fingerprint
 from wxcli.discovery.models import (
@@ -41,16 +43,20 @@ class DiscoveryService:
         store: DiscoveryStore,
         http_evidence: EvidenceService | None = None,
         browser_evidence: EvidenceService | None = None,
+        browser_decision: BrowserDecision | None = None,
         *,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._provider = provider
         self._store = store
         self._now = now
+        self._browser_decision = browser_decision
         self._hydration = HydrationCoordinator(
             http_evidence,
             browser_evidence,
             now=now,
+            monotonic=monotonic,
         )
 
     def search(self, request: DiscoveryRequest) -> DiscoveryResult:
@@ -141,8 +147,13 @@ class DiscoveryService:
         attempted = 0
         verified = 0
         partial = False
+        browser_summary = None
         if request.hydrate:
-            self._hydration.hydrate(candidates, request)
+            browser_summary = self._hydration.hydrate(
+                candidates,
+                request,
+                self._browser_decision,
+            )
             attempted = sum(
                 item.hydration_decision != HydrationDecision.CANDIDATE_ONLY
                 for item in candidates
@@ -176,6 +187,7 @@ class DiscoveryService:
                 partial=partial,
             ),
             candidates=candidates,
+            browser_fallback=browser_summary,
         )
 
 

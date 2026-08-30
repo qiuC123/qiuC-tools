@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 from wxcli.errors import ErrorCode
+from wxcli.browser_policy import BrowserMode, BrowserPolicySource
 from wxcli.evidence import ArticleEvidence, ExpectedAccount
 from wxcli.models import Provider
 from wxcli.redaction import contains_credential_assignment
@@ -236,6 +237,22 @@ class HydrationAttempt(BaseModel):
     verification_status: VerificationStatus
     error_code: ErrorCode
     message: str
+    verification_stage: Literal["browser"] | None = None
+    required_action: Literal["run_browser_login"] | None = None
+
+
+class BrowserFallbackSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    effective_mode: BrowserMode
+    policy_source: BrowserPolicySource
+    eligible: int = Field(ge=0)
+    attempted: int = Field(ge=0)
+    verified: int = Field(ge=0)
+    user_action_required: int = Field(ge=0)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    warning: Literal["browser_policy_invalid"] | None = None
 
 
 class ArticleCandidate(BaseModel):
@@ -289,6 +306,7 @@ class DiscoveryResult(BaseModel):
     checkpoint: str
     summary: DiscoverySummary
     candidates: list[ArticleCandidate]
+    browser_fallback: BrowserFallbackSummary | None = None
 
 
 class CandidateRejection(BaseModel):
@@ -321,6 +339,7 @@ class CandidateIngestionResult(BaseModel):
     summary: CandidateIngestionSummary
     rejections: list[CandidateRejection]
     candidates: list[ArticleCandidate]
+    browser_fallback: BrowserFallbackSummary | None = None
 
 
 class SearchHit(BaseModel):

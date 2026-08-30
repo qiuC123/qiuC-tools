@@ -32,6 +32,7 @@ class ErrorCode(StrEnum):
     NETWORK_ERROR = "NETWORK_ERROR"
     AUTHENTICATION_ERROR = "AUTHENTICATION_ERROR"
     CHROME_ERROR = "CHROME_ERROR"
+    BROWSER_BUSY = "BROWSER_BUSY"
     PARSING_ERROR = "PARSING_ERROR"
     LOCAL_CONFIGURATION_ERROR = "LOCAL_CONFIGURATION_ERROR"
     VERIFICATION_REQUIRED = "VERIFICATION_REQUIRED"
@@ -45,6 +46,7 @@ ERROR_EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.NETWORK_ERROR: ExitCode.NETWORK,
     ErrorCode.AUTHENTICATION_ERROR: ExitCode.AUTHENTICATION,
     ErrorCode.CHROME_ERROR: ExitCode.CHROME,
+    ErrorCode.BROWSER_BUSY: ExitCode.CHROME,
     ErrorCode.PARSING_ERROR: ExitCode.PARSING,
     ErrorCode.LOCAL_CONFIGURATION_ERROR: ExitCode.LOCAL_CONFIGURATION,
     ErrorCode.VERIFICATION_REQUIRED: ExitCode.AUTHENTICATION,
@@ -91,8 +93,13 @@ class NotFoundError(WxcliError):
 class VerificationRequiredError(WxcliError):
     """Human browser verification is required before continuing."""
 
-    def __init__(self, message: str = "WeChat requires browser verification.") -> None:
+    def __init__(
+        self,
+        message: str = "WeChat requires browser verification.",
+        **details: Any,
+    ) -> None:
         super().__init__(
             ErrorCode.VERIFICATION_REQUIRED,
             message,
+            details,
         )

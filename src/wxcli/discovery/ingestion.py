@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from pydantic import HttpUrl
 
+from wxcli.browser_policy import BrowserDecision
 from wxcli.discovery.hydration import HydrationCoordinator
 from wxcli.discovery.identity import article_identity, query_fingerprint
 from wxcli.discovery.models import (
@@ -40,6 +42,7 @@ class CandidateIngestionService:
         browser_evidence: EvidenceService | None = None,
         *,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._store = store
         self._now = now
@@ -47,6 +50,7 @@ class CandidateIngestionService:
             http_evidence,
             browser_evidence,
             now=now,
+            monotonic=monotonic,
         )
 
     def ingest(
@@ -58,6 +62,7 @@ class CandidateIngestionService:
         require_account_match: bool = False,
         require_published_date: bool = False,
         allow_browser: bool = False,
+        browser_decision: BrowserDecision | None = None,
     ) -> CandidateIngestionResult:
         policy = batch.hydration
         request = DiscoveryRequest(
@@ -145,7 +150,11 @@ class CandidateIngestionService:
 
         candidates = rank_candidates(candidates, request)
         choose_hydration(candidates, request)
-        self._hydration.hydrate(candidates, request)
+        browser_summary = self._hydration.hydrate(
+            candidates,
+            request,
+            browser_decision,
+        )
         attempted = sum(
             item.hydration_decision != HydrationDecision.CANDIDATE_ONLY
             for item in candidates
@@ -174,4 +183,5 @@ class CandidateIngestionService:
             ),
             rejections=rejections,
             candidates=candidates,
+            browser_fallback=browser_summary,
         )

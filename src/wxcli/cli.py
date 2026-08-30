@@ -18,6 +18,13 @@ from wxcli import __version__
 from wxcli.auth import AccessTokenStore, AppIdStore, SecretStore, TokenManager, default_backend
 from wxcli.cache import ArticleCache
 from wxcli.browser import BrowserProfile
+from wxcli.browser_policy import (
+    BrowserDecision,
+    BrowserFallbackPolicy,
+    BrowserMode,
+    BrowserPolicyStore,
+    resolve_browser_decision,
+)
 from wxcli.doctor import Doctor
 from wxcli.draft_import import WordDraftImporter
 from wxcli.draft_import import PreparedDraft
@@ -39,7 +46,7 @@ from wxcli.official_draft import OfficialDraftWriter
 from wxcli.output import Output, configure_utf8_streams, is_interactive
 from wxcli.providers.local import LocalFileProvider
 from wxcli.providers.http import PublicHttpProvider
-from wxcli.providers.chrome import ChromeProvider
+from wxcli.providers.chrome import ChromeEvidenceService, ChromeProvider
 from wxcli.providers.official import OfficialAccountProvider
 from wxcli.providers.chrome import CHROME_PATH
 
@@ -52,6 +59,7 @@ app = typer.Typer(
 article_app = typer.Typer(help="Read individual articles without modifying them.")
 cache_app = typer.Typer(help="Manage successful public-article cache entries.")
 browser_app = typer.Typer(help="Use the dedicated visible Chrome profile.")
+browser_policy_app = typer.Typer(help="Manage durable HTTP-to-Chrome fallback authorization.")
 auth_app = typer.Typer(help="Configure and test Official Account read-only access.")
 account_app = typer.Typer(help="Read drafts and published Official Account messages.")
 draft_app = typer.Typer(help="Read, preview, back up, compare, or safely change drafts.")
@@ -62,6 +70,7 @@ discovery_cache_app = typer.Typer(help="Manage discovery search state only.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
 app.add_typer(browser_app, name="browser")
+browser_app.add_typer(browser_policy_app, name="policy")
 app.add_typer(auth_app, name="auth")
 app.add_typer(account_app, name="account")
 app.add_typer(discovery_app, name="discovery")
@@ -81,6 +90,11 @@ def default_browser_profile() -> BrowserProfile:
     """Return wxcli's independent profile and local status paths."""
     root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "wxcli"
     return BrowserProfile(root / "chrome-profile", root / "browser-state.json")
+
+
+def default_browser_policy() -> BrowserPolicyStore:
+    """Return the non-secret durable browser-fallback policy store."""
+    return BrowserPolicyStore(default_runtime_root() / "browser-policy.json")
 
 
 def default_runtime_root() -> Path:
@@ -181,12 +195,30 @@ def article_from_public_url(
     url: str = typer.Argument(..., help="Supported public WeChat article URL."),
     no_cache: bool = typer.Option(False, "--no-cache", help="Do not read or write cache."),
     browser: bool = typer.Option(False, "--browser", help="Open visible Chrome for this request."),
+    browser_fallback: bool = typer.Option(
+        False,
+        "--browser-fallback",
+        help="Try HTTP first and use visible Chrome only after verification is required.",
+    ),
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Prohibit Chrome for this request even when durable fallback is enabled.",
+    ),
 ) -> None:
     """Read a supported public article URL through HTTP."""
     output = context.find_root().obj
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
-    if browser:
+    decision = resolve_browser_decision(
+        default_browser_policy(),
+        browser=browser,
+        browser_fallback=browser_fallback,
+        no_browser=no_browser,
+        browser_is_direct=True,
+    )
+    _diagnose_browser_warning(output, decision)
+    if decision.mode is BrowserMode.DIRECT:
         output.success(
             ChromeProvider(default_browser_profile(), cache=default_cache()).get(
                 url, no_cache=no_cache
@@ -194,7 +226,17 @@ def article_from_public_url(
         )
         return
     with httpx.Client(timeout=30.0) as client:
-        output.success(PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache))
+        try:
+            article = PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache)
+        except WxcliError as error:
+            if error.code != ErrorCode.VERIFICATION_REQUIRED or not decision.allows_fallback:
+                _attach_browser_warning(error, decision)
+                raise
+            article = ChromeProvider(default_browser_profile(), cache=default_cache()).get(
+                url,
+                no_cache=no_cache,
+            )
+        output.success(article)
 
 
 @article_app.command("evidence")
@@ -202,16 +244,43 @@ def article_evidence(
     context: typer.Context,
     url: str = typer.Argument(..., help="Supported public WeChat article URL."),
     browser: bool = typer.Option(False, "--browser", help="Use visible Chrome for this request."),
+    browser_fallback: bool = typer.Option(
+        False,
+        "--browser-fallback",
+        help="Try HTTP first and use visible Chrome only after verification is required.",
+    ),
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Prohibit Chrome for this request even when durable fallback is enabled.",
+    ),
 ) -> None:
     """Read one real WeChat page and return versioned article evidence."""
     output = _output(context)
-    if browser:
+    decision = resolve_browser_decision(
+        default_browser_policy(),
+        browser=browser,
+        browser_fallback=browser_fallback,
+        no_browser=no_browser,
+        browser_is_direct=True,
+    )
+    _diagnose_browser_warning(output, decision)
+    if decision.mode is BrowserMode.DIRECT:
         chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
         output.success(EvidenceService(chrome_provider).get(url))
         return
     with httpx.Client(timeout=30.0) as client:
         http_provider = PublicHttpProvider(client, default_cache())
-        output.success(EvidenceService(http_provider).get(url))
+        try:
+            evidence = EvidenceService(http_provider).get(url)
+        except WxcliError as error:
+            if error.code != ErrorCode.VERIFICATION_REQUIRED or not decision.allows_fallback:
+                _attach_browser_warning(error, decision)
+                raise
+            evidence = EvidenceService(
+                ChromeProvider(default_browser_profile(), cache=default_cache())
+            ).get(url)
+        output.success(evidence)
 
 
 @discovery_app.command("search")
@@ -233,6 +302,16 @@ def discovery_search(
     require_account_match: bool = typer.Option(False, "--require-account-match"),
     require_published_date: bool = typer.Option(False, "--require-published-date"),
     browser: bool = typer.Option(False, "--browser", help="Allow serial Chrome fallback after verification."),
+    browser_fallback: bool = typer.Option(
+        False,
+        "--browser-fallback",
+        help="Allow one-shot serial Chrome fallback after HTTP verification pages.",
+    ),
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Prohibit Chrome even when request JSON or durable policy allows it.",
+    ),
 ) -> None:
     """Discover candidates and optionally hydrate selected WeChat articles."""
     output = _output(context)
@@ -254,7 +333,18 @@ def discovery_search(
         max_hydrate=max_hydrate,
         require_account_match=require_account_match,
         require_published_date=require_published_date,
-        allow_browser=browser,
+        allow_browser=browser or browser_fallback,
+    )
+    decision = resolve_browser_decision(
+        default_browser_policy(),
+        browser=browser,
+        browser_fallback=browser_fallback,
+        no_browser=no_browser,
+        request_allow_browser=request.allow_browser,
+    )
+    _diagnose_browser_warning(output, decision)
+    request = request.model_copy(
+        update={"allow_browser": request.hydrate and decision.allows_fallback}
     )
     validate_discovery_tokens(request)
     api_key = default_discovery_secrets().get_brave_api_key()
@@ -265,7 +355,9 @@ def discovery_search(
             EvidenceService(PublicHttpProvider(client, default_cache())) if request.hydrate else None
         )
         browser_evidence = (
-            EvidenceService(ChromeProvider(default_browser_profile(), cache=default_cache()))
+            ChromeEvidenceService(
+                ChromeProvider(default_browser_profile(), cache=default_cache())
+            )
             if request.allow_browser
             else None
         )
@@ -274,6 +366,7 @@ def discovery_search(
             default_discovery_store(),
             http_evidence=http_evidence,
             browser_evidence=browser_evidence,
+            browser_decision=decision,
         )
         output.success(service.search(request))
 
@@ -291,6 +384,16 @@ def discovery_hydrate(
         "--browser",
         help="Explicitly allow serial Chrome fallback after HTTP verification pages.",
     ),
+    browser_fallback: bool = typer.Option(
+        False,
+        "--browser-fallback",
+        help="Allow one-shot serial Chrome fallback after HTTP verification pages.",
+    ),
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Prohibit Chrome even when durable fallback is enabled.",
+    ),
 ) -> None:
     """Validate and hydrate one agent-orchestrated Candidate Batch."""
     output = _output(context)
@@ -305,11 +408,20 @@ def discovery_hydrate(
     )
     if effective_priority > effective_maximum:
         raise ValidationError("priority_hydrate must not exceed max_hydrate.")
+    decision = resolve_browser_decision(
+        default_browser_policy(),
+        browser=browser,
+        browser_fallback=browser_fallback,
+        no_browser=no_browser,
+    )
+    _diagnose_browser_warning(output, decision)
     with httpx.Client(timeout=30.0) as client:
         http_evidence = EvidenceService(PublicHttpProvider(client, default_cache()))
         browser_evidence = (
-            EvidenceService(ChromeProvider(default_browser_profile(), cache=default_cache()))
-            if browser
+            ChromeEvidenceService(
+                ChromeProvider(default_browser_profile(), cache=default_cache())
+            )
+            if decision.allows_fallback
             else None
         )
         service = CandidateIngestionService(
@@ -324,7 +436,8 @@ def discovery_hydrate(
                 max_hydrate=max_hydrate,
                 require_account_match=require_account_match,
                 require_published_date=require_published_date,
-                allow_browser=browser,
+                allow_browser=decision.allows_fallback,
+                browser_decision=decision,
             )
         )
 
@@ -384,7 +497,7 @@ def browser_login(context: typer.Context) -> None:
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     output.diagnostic("Chrome is opening with the wxcli-only profile.")
     ChromeProvider(default_browser_profile()).open_login()
-    output.success({"opened": True})
+    output.success({"opened": True, "session_validity": "not_verified"})
 
 
 @browser_app.command("status")
@@ -394,7 +507,15 @@ def browser_status(context: typer.Context) -> None:
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     status = default_browser_profile().status()
-    output.success({"profile_exists": status.profile_exists, "last_verified_at": status.last_verified_at})
+    output.success(
+        {
+            "profile_exists": status.profile_exists,
+            "last_verified_at": status.last_verified_at,
+            "legacy_last_verified_at": status.legacy_last_verified_at,
+            "last_successful_read_at": status.last_successful_read_at,
+            "session_validity": "not_verified",
+        }
+    )
 
 
 @browser_app.command("clear")
@@ -405,6 +526,37 @@ def browser_clear(context: typer.Context) -> None:
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     default_browser_profile().clear()
     output.success({"cleared": True})
+
+
+@browser_policy_app.command("set")
+def browser_policy_set(
+    context: typer.Context,
+    policy: BrowserFallbackPolicy = typer.Argument(..., help="never or auto-fallback"),
+) -> None:
+    """Set durable local fallback authorization without touching browser session state."""
+    output = _output(context)
+    status = default_browser_policy().set(policy)
+    output.success(
+        {
+            "policy": status.policy,
+            "configured": status.configured,
+            "valid": status.valid,
+        }
+    )
+
+
+@browser_policy_app.command("status")
+def browser_policy_status(context: typer.Context) -> None:
+    """Report durable policy state without opening Chrome."""
+    output = _output(context)
+    status = default_browser_policy().status(strict=True)
+    output.success(
+        {
+            "policy": status.policy,
+            "configured": status.configured,
+            "valid": status.valid,
+        }
+    )
 
 
 @auth_app.command("configure")
@@ -688,7 +840,7 @@ def _output(context: typer.Context) -> Output:
 
 def _require_brave(provider: str) -> None:
     if provider.casefold() != "brave":
-        raise ValidationError("Only the brave discovery provider is supported in wxcli 0.4.0.")
+        raise ValidationError("Only the brave discovery provider is supported in wxcli 0.5.0.")
 
 
 def _has_explicit_discovery_search_options(context: typer.Context) -> bool:
@@ -708,6 +860,7 @@ def _has_explicit_discovery_search_options(context: typer.Context) -> bool:
         "require_account_match",
         "require_published_date",
         "browser",
+        "browser_fallback",
     )
     return any(
         (source := context.get_parameter_source(name)) is not None
@@ -828,6 +981,16 @@ def _read_bounded_candidate_batch(input_path: str) -> str:
         return raw.decode("utf-8")
     except UnicodeDecodeError as error:
         raise InputError("The Candidate Batch input must be UTF-8.") from error
+
+
+def _diagnose_browser_warning(output: Output, decision: BrowserDecision) -> None:
+    if decision.warning:
+        output.diagnostic(decision.warning)
+
+
+def _attach_browser_warning(error: WxcliError, decision: BrowserDecision) -> None:
+    if decision.warning:
+        error.details.setdefault("warning", decision.warning)
 
 
 def main() -> None:

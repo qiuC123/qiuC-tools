@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from contextlib import contextmanager
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -114,6 +116,12 @@ class EvidenceService:
     ) -> ArticleEvidence:
         document = self._provider.get_document(url)
         return build_article_evidence(document, expected_accounts or [])
+
+    @contextmanager
+    def batch(self, *, timeout_seconds: float | None = None) -> Iterator[EvidenceService]:
+        """Provide a reusable evidence reader; non-browser providers need no setup."""
+        del timeout_seconds
+        yield self
 
 
 def build_article_evidence(

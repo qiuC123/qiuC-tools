@@ -88,6 +88,7 @@ def test_each_error_code_has_its_contractual_exit_code() -> None:
         ErrorCode.NETWORK_ERROR: ExitCode.NETWORK,
         ErrorCode.AUTHENTICATION_ERROR: ExitCode.AUTHENTICATION,
         ErrorCode.CHROME_ERROR: ExitCode.CHROME,
+        ErrorCode.BROWSER_BUSY: ExitCode.CHROME,
         ErrorCode.PARSING_ERROR: ExitCode.PARSING,
         ErrorCode.LOCAL_CONFIGURATION_ERROR: ExitCode.LOCAL_CONFIGURATION,
         ErrorCode.VERIFICATION_REQUIRED: ExitCode.AUTHENTICATION,

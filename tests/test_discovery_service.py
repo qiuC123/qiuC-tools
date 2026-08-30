@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from contextlib import contextmanager
 
 from wxcli.discovery.models import (
     CandidateConfidence,
@@ -41,6 +42,19 @@ class FakeEvidence:
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
+
+
+class BatchFakeEvidence(FakeEvidence):
+    def __init__(self, outcomes: dict[str, object]) -> None:
+        super().__init__(outcomes)
+        self.batch_count = 0
+        self.timeouts: list[float] = []
+
+    @contextmanager
+    def batch(self, *, timeout_seconds: float):
+        self.batch_count += 1
+        self.timeouts.append(timeout_seconds)
+        yield self
 
 
 def evidence(url: str, *, account: str = "Acme Jobs", biz: str = "BIZ", date: bool = True):
@@ -186,6 +200,224 @@ def test_network_retries_once_and_chrome_failure_preserves_verification_status(t
     assert candidate.verification_status == VerificationStatus.VERIFICATION_REQUIRED
     assert candidate.hydration_attempt is not None
     assert candidate.hydration_attempt.error_code == ErrorCode.CHROME_ERROR
+
+
+def test_browser_batch_opens_once_and_uses_fresh_candidate_reads(tmp_path) -> None:
+    urls = [f"https://mp.weixin.qq.com/s/T{index}" for index in range(1, 3)]
+    provider = FakeDiscoveryProvider(
+        {0: SearchPage(hits=[hit(index, url) for index, url in enumerate(urls, 1)], has_more=False)}
+    )
+    http = FakeEvidence({url: VerificationRequiredError() for url in urls})
+    browser = BatchFakeEvidence({url: evidence(url) for url in urls})
+    service = DiscoveryService(
+        provider,
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        http_evidence=http,  # type: ignore[arg-type]
+        browser_evidence=browser,  # type: ignore[arg-type]
+        now=lambda: NOW,
+    )
+
+    result = service.search(
+        DiscoveryRequest(
+            query="x",
+            hydrate=True,
+            priority_hydrate=2,
+            max_hydrate=2,
+            allow_browser=True,
+        )
+    )
+
+    assert browser.batch_count == 1
+    assert browser.calls == urls
+    assert result.browser_fallback is not None
+    assert result.browser_fallback.eligible == 2
+    assert result.browser_fallback.attempted == 2
+    assert result.browser_fallback.verified == 2
+
+
+def test_first_human_challenge_stops_browser_run_and_marks_unvisited(tmp_path) -> None:
+    urls = [f"https://mp.weixin.qq.com/s/T{index}" for index in range(1, 4)]
+    challenge = VerificationRequiredError(
+        verification_stage="browser",
+        required_action="run_browser_login",
+    )
+    browser = BatchFakeEvidence(
+        {urls[0]: challenge, urls[1]: evidence(urls[1]), urls[2]: evidence(urls[2])}
+    )
+    service = DiscoveryService(
+        FakeDiscoveryProvider(
+            {0: SearchPage(hits=[hit(index, url) for index, url in enumerate(urls, 1)], has_more=False)}
+        ),
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        http_evidence=FakeEvidence({url: VerificationRequiredError() for url in urls}),  # type: ignore[arg-type]
+        browser_evidence=browser,  # type: ignore[arg-type]
+        now=lambda: NOW,
+    )
+
+    result = service.search(
+        DiscoveryRequest(
+            query="x",
+            hydrate=True,
+            priority_hydrate=3,
+            max_hydrate=3,
+            allow_browser=True,
+        )
+    )
+
+    assert browser.calls == [urls[0]]
+    assert result.browser_fallback is not None
+    assert result.browser_fallback.attempted == 1
+    assert result.browser_fallback.user_action_required == 3
+    assert all(
+        candidate.hydration_attempt is not None
+        and candidate.hydration_attempt.required_action == "run_browser_login"
+        for candidate in result.candidates
+    )
+
+
+def test_chrome_crash_does_not_restart_or_discard_completed_http_results(tmp_path) -> None:
+    urls = ["https://mp.weixin.qq.com/s/T1", "https://mp.weixin.qq.com/s/T2"]
+    browser = BatchFakeEvidence(
+        {urls[0]: WxcliError(ErrorCode.CHROME_ERROR, "crashed"), urls[1]: evidence(urls[1])}
+    )
+    service = DiscoveryService(
+        FakeDiscoveryProvider(
+            {0: SearchPage(hits=[hit(1, urls[0]), hit(2, urls[1])], has_more=False)}
+        ),
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        http_evidence=FakeEvidence({url: VerificationRequiredError() for url in urls}),  # type: ignore[arg-type]
+        browser_evidence=browser,  # type: ignore[arg-type]
+        now=lambda: NOW,
+    )
+
+    result = service.search(
+        DiscoveryRequest(
+            query="x",
+            hydrate=True,
+            priority_hydrate=2,
+            max_hydrate=2,
+            allow_browser=True,
+        )
+    )
+
+    assert browser.batch_count == 1
+    assert browser.calls == [urls[0]]
+    assert result.browser_fallback is not None
+    assert result.browser_fallback.attempted == 1
+    assert all(
+        candidate.hydration_attempt is not None
+        and candidate.hydration_attempt.error_code == ErrorCode.CHROME_ERROR
+        for candidate in result.candidates
+    )
+
+
+def test_browser_not_found_continues_but_busy_marks_all_eligible(tmp_path) -> None:
+    urls = ["https://mp.weixin.qq.com/s/T1", "https://mp.weixin.qq.com/s/T2"]
+    pages = {0: SearchPage(hits=[hit(1, urls[0]), hit(2, urls[1])], has_more=False)}
+    http = FakeEvidence({url: VerificationRequiredError() for url in urls})
+    browser = BatchFakeEvidence({urls[0]: NotFoundError("missing"), urls[1]: evidence(urls[1])})
+    service = DiscoveryService(
+        FakeDiscoveryProvider(pages),
+        DiscoveryStore(tmp_path / "continue.sqlite3"),
+        http_evidence=http,  # type: ignore[arg-type]
+        browser_evidence=browser,  # type: ignore[arg-type]
+        now=lambda: NOW,
+    )
+    request = DiscoveryRequest(
+        query="x", hydrate=True, priority_hydrate=2, max_hydrate=2, allow_browser=True
+    )
+
+    continued = service.search(request)
+
+    assert browser.calls == urls
+    assert continued.candidates[0].verification_status is VerificationStatus.NOT_FOUND
+    assert continued.candidates[1].verification_status is VerificationStatus.VERIFIED
+
+    class BusyBrowser(FakeEvidence):
+        @contextmanager
+        def batch(self, *, timeout_seconds: float):
+            raise WxcliError(ErrorCode.BROWSER_BUSY, "busy")
+            yield self
+
+    busy = DiscoveryService(
+        FakeDiscoveryProvider(pages),
+        DiscoveryStore(tmp_path / "busy.sqlite3"),
+        http_evidence=FakeEvidence({url: VerificationRequiredError() for url in urls}),  # type: ignore[arg-type]
+        browser_evidence=BusyBrowser({}),  # type: ignore[arg-type]
+        now=lambda: NOW,
+    ).search(request)
+    assert busy.browser_fallback is not None
+    assert busy.browser_fallback.attempted == 0
+    assert all(
+        item.hydration_attempt is not None
+        and item.hydration_attempt.error_code is ErrorCode.BROWSER_BUSY
+        for item in busy.candidates
+    )
+
+
+def test_browser_close_failure_preserves_completed_browser_outcomes(tmp_path) -> None:
+    class CloseFailureBrowser(BatchFakeEvidence):
+        @contextmanager
+        def batch(self, *, timeout_seconds: float):
+            self.batch_count += 1
+            self.timeouts.append(timeout_seconds)
+            yield self
+            raise WxcliError(ErrorCode.CHROME_ERROR, "close failed")
+
+    urls = ["https://mp.weixin.qq.com/s/T1", "https://mp.weixin.qq.com/s/T2"]
+    browser = CloseFailureBrowser(
+        {urls[0]: NotFoundError("missing"), urls[1]: evidence(urls[1])}
+    )
+    result = DiscoveryService(
+        FakeDiscoveryProvider(
+            {0: SearchPage(hits=[hit(1, urls[0]), hit(2, urls[1])], has_more=False)}
+        ),
+        DiscoveryStore(tmp_path / "close.sqlite3"),
+        http_evidence=FakeEvidence(
+            {url: VerificationRequiredError() for url in urls}
+        ),  # type: ignore[arg-type]
+        browser_evidence=browser,  # type: ignore[arg-type]
+        now=lambda: NOW,
+    ).search(
+        DiscoveryRequest(
+            query="x",
+            hydrate=True,
+            priority_hydrate=2,
+            max_hydrate=2,
+            allow_browser=True,
+        )
+    )
+
+    assert result.candidates[0].verification_status is VerificationStatus.NOT_FOUND
+    assert result.candidates[0].hydration_attempt is not None
+    assert result.candidates[0].hydration_attempt.error_code is ErrorCode.NOT_FOUND
+    assert result.candidates[1].verification_status is VerificationStatus.VERIFIED
+    assert result.candidates[1].evidence is not None
+
+
+def test_browser_phase_respects_remaining_total_deadline(tmp_path) -> None:
+    url = "https://mp.weixin.qq.com/s/T1"
+    ticks = iter((0.0, 0.0, 601.0))
+    service = DiscoveryService(
+        FakeDiscoveryProvider({0: SearchPage(hits=[hit(1, url)], has_more=False)}),
+        DiscoveryStore(tmp_path / "deadline.sqlite3"),
+        http_evidence=FakeEvidence({url: VerificationRequiredError()}),  # type: ignore[arg-type]
+        browser_evidence=BatchFakeEvidence({url: evidence(url)}),  # type: ignore[arg-type]
+        now=lambda: NOW,
+        monotonic=lambda: next(ticks),
+    )
+
+    result = service.search(
+        DiscoveryRequest(
+            query="x", hydrate=True, priority_hydrate=1, max_hydrate=1, allow_browser=True
+        )
+    )
+
+    candidate = result.candidates[0]
+    assert candidate.hydration_attempt is not None
+    assert candidate.hydration_attempt.error_code is ErrorCode.CHROME_ERROR
+    assert result.browser_fallback is not None
+    assert result.browser_fallback.attempted == 0
 
 
 def test_strict_identity_and_date_filters_use_only_hydrated_source(tmp_path) -> None:

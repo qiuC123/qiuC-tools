@@ -84,6 +84,34 @@ def test_invalid_cli_arguments_exit_two_with_one_json(tmp_path: Path) -> None:
     assert payload["error"]["code"] == "INVALID_ARGUMENT"
 
 
+def test_browser_policy_process_contract_and_invalid_state(tmp_path: Path) -> None:
+    missing = run_process(tmp_path, "--json", "browser", "policy", "status")
+    configured = run_process(
+        tmp_path,
+        "--json",
+        "browser",
+        "policy",
+        "set",
+        "auto-fallback",
+    )
+    current = run_process(tmp_path, "--json", "browser", "policy", "status")
+
+    assert missing.returncode == configured.returncode == current.returncode == 0
+    assert assert_one_json(missing.stdout)["data"]["policy"] == "never"
+    assert assert_one_json(configured.stdout)["data"]["policy"] == "auto-fallback"
+    assert assert_one_json(current.stdout)["data"]["configured"] is True
+    assert missing.stderr == configured.stderr == current.stderr == ""
+
+    policy = tmp_path / "runtime" / "wxcli" / "browser-policy.json"
+    policy.write_text("not-json", encoding="utf-8")
+    invalid = run_process(tmp_path, "--json", "browser", "policy", "status")
+    payload = assert_one_json(invalid.stdout)
+    assert invalid.returncode == 9
+    assert invalid.stderr == ""
+    assert payload["error"]["code"] == "LOCAL_CONFIGURATION_ERROR"
+    assert payload["error"]["details"]["warning"] == "browser_policy_invalid"
+
+
 @pytest.mark.parametrize(
     ("html", "exit_code", "error_code"),
     [

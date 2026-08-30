@@ -2,11 +2,23 @@ import io
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import wxcli.cli as cli
 from wxcli.discovery.models import DiscoveryRequest
+from wxcli.browser_policy import BrowserFallbackPolicy, BrowserPolicyStore
+from wxcli.errors import VerificationRequiredError
 from wxcli.cli import _candidate_batch_request, _discovery_request, app
+
+
+@pytest.fixture(autouse=True)
+def isolated_browser_policy(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        cli,
+        "default_browser_policy",
+        lambda: BrowserPolicyStore(tmp_path / "default-browser-policy.json"),
+    )
 
 
 def request_kwargs() -> dict[str, object]:
@@ -165,8 +177,14 @@ def test_discovery_help_exposes_stable_commands() -> None:
     search = CliRunner().invoke(app, ["discovery", "search", "--help"])
     hydrate = CliRunner().invoke(app, ["discovery", "hydrate", "--help"])
     assert all(value in root.stdout for value in ("search", "hydrate", "auth", "cache"))
-    assert all(value in search.stdout for value in ("--input", "--checkpoint", "--hydrate", "--browser"))
-    assert all(value in hydrate.stdout for value in ("--input", "--max-hydrate", "--browser"))
+    assert all(
+        value in search.stdout
+        for value in ("--input", "--checkpoint", "--hydrate", "--browser", "--browser-fallback", "--no-browser")
+    )
+    assert all(
+        value in hydrate.stdout
+        for value in ("--input", "--max-hydrate", "--browser", "--browser-fallback", "--no-browser")
+    )
 
 
 def test_input_rejects_even_explicit_default_search_options(tmp_path: Path) -> None:
@@ -299,7 +317,11 @@ def test_discovery_hydrate_is_offline_from_search_and_does_not_open_chrome(tmp_p
     assert result.exit_code == 0
     assert json.loads(result.stdout)["data"]["discovery_mode"] == "agent_orchestrated"
     assert observed["browser_evidence"] is None
-    assert observed["options"] == {
+    options = observed["options"]
+    assert isinstance(options, dict)
+    decision = options.pop("browser_decision")
+    assert getattr(decision, "mode", None) == "never"
+    assert options == {
         "priority_hydrate": 1,
         "max_hydrate": 1,
         "require_account_match": False,
@@ -335,3 +357,129 @@ def test_discovery_hydrate_browser_requires_explicit_cli_flag(tmp_path, monkeypa
     assert result.exit_code == 0
     assert observed["browser_evidence"] is not None
     assert observed["allow_browser"] is True
+
+
+def test_browser_policy_commands_are_local_and_do_not_open_chrome(tmp_path, monkeypatch) -> None:
+    store = BrowserPolicyStore(tmp_path / "browser-policy.json")
+    monkeypatch.setattr(cli, "default_browser_policy", lambda: store)
+    monkeypatch.setattr(
+        cli,
+        "ChromeProvider",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Chrome must stay closed")),
+    )
+    runner = CliRunner()
+
+    configured = runner.invoke(
+        app,
+        ["--json", "browser", "policy", "set", "auto-fallback"],
+    )
+    status = runner.invoke(app, ["--json", "browser", "policy", "status"])
+
+    assert configured.exit_code == 0
+    assert json.loads(configured.stdout)["data"]["policy"] == "auto-fallback"
+    assert json.loads(status.stdout)["data"] == {
+        "policy": "auto-fallback",
+        "configured": True,
+        "valid": True,
+    }
+
+
+def test_article_fallback_runs_http_first_and_no_browser_overrides_policy(tmp_path, monkeypatch) -> None:
+    store = BrowserPolicyStore(tmp_path / "browser-policy.json")
+    store.set(BrowserFallbackPolicy.AUTO_FALLBACK)
+    monkeypatch.setattr(cli, "default_browser_policy", lambda: store)
+    calls: list[str] = []
+
+    class FakeHttp:
+        def __init__(self, *args, **kwargs) -> None: pass
+        def get(self, url: str, *, no_cache: bool = False):
+            calls.append("http")
+            raise VerificationRequiredError()
+
+    class FakeChrome:
+        def __init__(self, *args, **kwargs) -> None: pass
+        def get(self, url: str, *, no_cache: bool = False):
+            calls.append("chrome")
+            return {"provider": "chrome", "url": url}
+
+    monkeypatch.setattr(cli, "PublicHttpProvider", FakeHttp)
+    monkeypatch.setattr(cli, "ChromeProvider", FakeChrome)
+    runner = CliRunner()
+    allowed = runner.invoke(
+        app,
+        ["--json", "article", "get", "https://mp.weixin.qq.com/s/T1"],
+    )
+    assert allowed.exit_code == 0
+    assert calls == ["http", "chrome"]
+
+    calls.clear()
+    prohibited = runner.invoke(
+        app,
+        ["article", "get", "https://mp.weixin.qq.com/s/T1", "--no-browser"],
+    )
+    assert prohibited.exit_code != 0
+    assert getattr(prohibited.exception, "code", None) == "VERIFICATION_REQUIRED"
+    assert calls == ["http"]
+
+
+def test_direct_request_json_can_grant_once_but_no_browser_wins(tmp_path, monkeypatch) -> None:
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1",
+                "query": "campus",
+                "hydrate": True,
+                "allow_browser": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    observed: dict[str, object] = {}
+
+    class FakeDiscoveryService:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            observed["browser_evidence"] = kwargs.get("browser_evidence")
+            observed["decision"] = kwargs.get("browser_decision")
+        def search(self, request: DiscoveryRequest) -> dict[str, object]:
+            observed["request"] = request
+            return {"schema_version": "1", "candidates": []}
+
+    monkeypatch.setattr(cli, "default_browser_policy", lambda: BrowserPolicyStore(tmp_path / "missing.json"))
+    monkeypatch.setattr(cli, "default_discovery_secrets", lambda: FakeSecrets())
+    monkeypatch.setattr(cli, "default_discovery_store", lambda: object())
+    monkeypatch.setattr(cli, "BraveDiscoveryProvider", lambda *args: object())
+    monkeypatch.setattr(cli, "PublicHttpProvider", lambda *args, **kwargs: object())
+    monkeypatch.setattr(cli, "EvidenceService", lambda provider: object())
+    monkeypatch.setattr(cli, "DiscoveryService", FakeDiscoveryService)
+    monkeypatch.setattr(
+        cli,
+        "ChromeProvider",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Chrome must stay closed")),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["--json", "discovery", "search", "--input", str(request_path), "--no-browser"],
+    )
+
+    assert result.exit_code == 0
+    assert observed["browser_evidence"] is None
+    assert getattr(observed["decision"], "mode", None) == "never"
+    assert getattr(observed["request"], "allow_browser", None) is False
+
+
+def test_conflicting_browser_controls_are_rejected(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "default_browser_policy", lambda: BrowserPolicyStore(tmp_path / "policy.json"))
+    result = CliRunner().invoke(
+        app,
+        [
+            "article",
+            "get",
+            "https://mp.weixin.qq.com/s/T1",
+            "--browser-fallback",
+            "--no-browser",
+        ],
+    )
+    assert result.exit_code != 0
+    assert getattr(result.exception, "code", None) == "INVALID_ARGUMENT"
