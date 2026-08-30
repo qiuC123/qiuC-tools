@@ -2,7 +2,7 @@
 
 ## 0.5.0 开发更新（2026-08-30）
 
-0.5.0 的浏览器兜底可靠性功能已在分支 `codex/wxcli-0.5-browser-fallback` 完成源码实现、离线验证和稳定目录安装。本机 `current` 现为 0.5.0，`previous` 为已验收的 0.4.0；下面的 0.4.0 内容保留为历史验收记录和回滚依据。
+0.5.0 的浏览器兜底可靠性功能已完成源码实现、离线验证和稳定目录安装，并快进合并到本地 `main`。本机 `current` 现为 0.5.0，`previous` 为已验收的 0.4.0；下面的 0.4.0 内容保留为历史验收记录和回滚依据。
 
 本轮实现包括：
 
@@ -18,7 +18,7 @@
 ```text
 pytest: 235 passed
 mypy: Success: no issues found in 36 source files
-coverage: repository 86%; browser_policy 98%; hydration 95%; Chrome Provider 91%
+coverage: repository 88%; browser_policy 98%; hydration 96%; Chrome Provider 91%
 ```
 
 已完成 0.5.0 的独立 PyInstaller onedir 构建和脚本内置离线冒烟，产物为 `dist\release\wxcli-0.5.0-windows-x64.zip`，SHA-256 为 `f2a9a6e5523ebee3d50e40d7897e5838229f6ec2998217e13f47cb86f786a1e0`。原子安装成功：`current` 为 0.5.0，`previous` 为 0.4.0。用户级 Skill 的 7 个仓库管理文件与源码哈希一致，安装目录另有 `.wxcli-version` 版本标记文件。
@@ -309,4 +309,4 @@ wxcli --json doctor
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，HEAD 为 `2b9c53a`，wxcli 为 0.4.0，Doctor 默认不执行 live checks，测试 208 项通过，mypy 零问题。
+预期结果：分支为 `main`，版本为 0.5.0，Doctor 默认不执行 live checks，测试 235 项通过，mypy 零问题。正式发布前还应确认 `v0.5.0` tag 指向当前发布提交，并完成上文单独授权的真实微信/Chrome live smoke。
