@@ -178,7 +178,7 @@ Every cache read recomputes and verifies the expected byte SHA-256 before decodi
 The approved clear command is:
 
 ```powershell
-wxcli media cache clear
+wechat-oa --json media cache clear
 ```
 
 It does not clear Article Cache, discovery history/checkpoints, Browser Session state, Browser Fallback Policy, credentials, or Evidence Bundles.

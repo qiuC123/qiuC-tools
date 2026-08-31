@@ -109,6 +109,9 @@ wechat-oa --json browser policy status
 # 清除公共文章成功缓存
 wechat-oa cache clear
 
+# 只清除独立的公开图片 Media Cache
+wechat-oa media cache clear
+
 # 交互式录入官方接口凭证，以及只报告“是否存在”的状态
 wechat-oa auth configure
 wechat-oa auth status
