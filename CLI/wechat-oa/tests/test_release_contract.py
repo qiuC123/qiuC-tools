@@ -17,6 +17,12 @@ def test_source_and_package_versions_match() -> None:
     assert project["project"]["scripts"]["wxcli"] == "wxcli.cli:main"
 
 
+def test_direct_runtime_imports_are_declared_dependencies() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "click>=8.1,<9.0" in project["project"]["dependencies"]
+
+
 def test_release_is_windows_x64_onedir_zip_with_checksum() -> None:
     script = (ROOT / "scripts" / "build-release.ps1").read_text(encoding="utf-8")
 

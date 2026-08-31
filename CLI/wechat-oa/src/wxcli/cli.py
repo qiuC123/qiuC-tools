@@ -31,7 +31,6 @@ from wxcli.draft_import import PreparedDraft
 from wxcli.draft_update import DraftUpdatePlanner
 from wxcli.errors import ErrorCode, ExitCode, InputError, ValidationError, WxcliError
 from wxcli.evidence import EvidenceService
-from wxcli.media import MediaCache
 from wxcli.discovery.auth import DiscoverySecretStore
 from wxcli.discovery.brave import BraveDiscoveryProvider
 from wxcli.discovery.ingestion import CandidateIngestionService
@@ -42,6 +41,7 @@ from wxcli.discovery.models import (
 )
 from wxcli.discovery.service import DiscoveryService, validate_discovery_tokens
 from wxcli.discovery.store import DiscoveryStore
+from wxcli.media import MediaCache
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.official_draft import OfficialDraftWriter
 from wxcli.output import Output, configure_utf8_streams, is_interactive

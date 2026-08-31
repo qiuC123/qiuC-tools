@@ -180,6 +180,7 @@ def test_download_validates_and_records_every_redirect_without_forwarding_cookie
         requests.append(request)
         assert "authorization" not in request.headers
         assert "cookie" not in request.headers
+        assert request.headers["accept-encoding"] == "identity"
         if len(requests) == 1:
             return httpx.Response(
                 302,
@@ -287,6 +288,21 @@ def test_download_bounds_retry_after_and_retries_429_once() -> None:
 
     assert result.media_format == MediaFormat.PNG
     assert waits == [10.0]
+    assert requests == 2
+
+
+def test_download_maps_second_429_after_the_single_retry() -> None:
+    requests = 0
+
+    def respond(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(429)
+
+    with pytest.raises(MediaDownloadFailure, match="rate limited after one retry") as raised:
+        downloader(httpx.MockTransport(respond), sleep=lambda _: None).download(IMAGE_URL)
+
+    assert raised.value.reason == MediaItemReason.DOWNLOAD_FAILED
     assert requests == 2
 
 

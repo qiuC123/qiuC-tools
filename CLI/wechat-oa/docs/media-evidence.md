@@ -37,6 +37,13 @@ LRU access only after successful verification, and remove corrupt or expired ent
 Cleanup expires references first, removes orphan blobs, and then deterministically evicts the least
 recently used references until the complete cache is within its configurable hard cap of 1 GB.
 
+The cache deliberately treats its directories as the source of truth instead of maintaining a
+second persistent index. A write therefore performs a linear reference/blob scan to enforce expiry,
+integrity, and the hard size cap. One cleanup parses each reference once and tracks eviction size
+and blob reference counts in memory. This is appropriate for the initial bounded local cache; if
+real installations grow to sustained high reference counts, replace the directory scans with a
+transactional index rather than layering more ad-hoc metadata files onto this format.
+
 Article-level acquisition lives in `src/wxcli/media/orchestration.py`. It consumes only the existing
 `Article.images` sequence, keeps source order, applies the configured per-image and per-Article
 limits before each request, isolates per-item failures, and treats cache I/O as best-effort rather
@@ -116,6 +123,14 @@ OCR text never merges into `Article.content_markdown`, never changes the core Ar
 Only HTTPS URLs already present in `Article.images` and hosted on a maintained allowlist of tested WeChat media CDN hosts are eligible. Unknown or external image hosts remain visible as skipped source URLs but are not fetched.
 
 Before the request and after every redirect, wxcli validates the scheme, normalized host, resolved IP addresses, and final destination. It rejects loopback, link-local, private, reserved, non-HTTPS, unapproved-host, and unsafe redirect targets. It never expands arbitrary short links.
+
+The system resolver check is a policy guard, not connection-level DNS pinning: the HTTP transport
+performs its own resolution when it connects, so a DNS change between validation and connection is
+a known time-of-check/time-of-use boundary. The initial exact allowlist contains only
+`mmbiz.qpic.cn`, which keeps this low risk because an attacker cannot select or control an arbitrary
+hostname. If the allowlist ever expands beyond provider-controlled exact hosts or the threat model
+requires defense against compromise of the approved host's DNS, the transport must connect to the
+validated address while preserving the approved TLS SNI and `Host` value.
 
 The downloader uses a dedicated client and sends no Cookie, Browser Session data, Authorization header, search API key, Official Account credential, or caller-supplied header. It does not reuse a browser page or a user's normal Chrome session.
 
