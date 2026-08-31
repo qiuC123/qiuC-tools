@@ -143,6 +143,7 @@ class MediaDownloader:
         timeout = httpx.Timeout(self._timeout_seconds)
         headers = {
             "Accept": "image/webp,image/png,image/jpeg,image/gif;q=0.9",
+            "Accept-Encoding": "identity",
             "User-Agent": "wechat-oa-media/0.6",
         }
         with httpx.Client(
@@ -229,13 +230,18 @@ class MediaDownloader:
                                 "Image redirect did not include a destination.",
                             )
                         return _Redirect(location)
-                    if response.status_code == 429 and attempt == 0:
-                        delay = min(
-                            _retry_after_delay(response.headers.get("retry-after")),
-                            self._remaining_seconds(deadline),
+                    if response.status_code == 429:
+                        if attempt == 0:
+                            delay = min(
+                                _retry_after_delay(response.headers.get("retry-after")),
+                                self._remaining_seconds(deadline),
+                            )
+                            self._sleep(delay)
+                            continue
+                        raise MediaDownloadFailure(
+                            MediaItemReason.DOWNLOAD_FAILED,
+                            "Image download was rate limited after one retry.",
                         )
-                        self._sleep(delay)
-                        continue
                     if response.status_code in {401, 403}:
                         raise MediaDownloadFailure(
                             MediaItemReason.DOWNLOAD_FORBIDDEN,
@@ -268,20 +274,16 @@ class MediaDownloader:
                 last_error = error
                 if attempt == 0:
                     continue
+        assert last_error is not None
         if isinstance(last_error, httpx.TimeoutException):
             raise MediaDownloadFailure(
                 MediaItemReason.DOWNLOAD_TIMEOUT,
                 "Image download timed out after one retry.",
             ) from last_error
-        if last_error is not None:
-            raise MediaDownloadFailure(
-                MediaItemReason.DOWNLOAD_FAILED,
-                "Image download failed after one retry.",
-            ) from last_error
         raise MediaDownloadFailure(
             MediaItemReason.DOWNLOAD_FAILED,
-            "Image download was rate limited after one retry.",
-        )
+            "Image download failed after one retry.",
+        ) from last_error
 
     def _remaining_seconds(self, deadline: float) -> float:
         remaining = deadline - self._clock()
