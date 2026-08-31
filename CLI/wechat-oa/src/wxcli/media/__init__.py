@@ -45,6 +45,13 @@ from wxcli.media.orchestration import (
     MediaAcquisitionItem,
     MediaAcquisitionStatus,
 )
+from wxcli.media.qr import (
+    STANDARD_QR_ANALYZER,
+    STANDARD_QR_ANALYZER_VERSION,
+    StandardQRAnalyzer,
+    StandardQRDecoder,
+    ZXingStandardQRDecoder,
+)
 
 __all__ = [
     "APPROVED_MEDIA_HOSTS",
@@ -81,6 +88,11 @@ __all__ = [
     "QRPayloadEvidence",
     "QRPayloadType",
     "QRStatus",
+    "STANDARD_QR_ANALYZER",
+    "STANDARD_QR_ANALYZER_VERSION",
+    "StandardQRAnalyzer",
+    "StandardQRDecoder",
     "SystemHostResolver",
+    "ZXingStandardQRDecoder",
     "build_media_evidence",
 ]
