@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models and standalone safe image downloader are implemented; cache, orchestration, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, and original-byte Media Cache are implemented; orchestration, derived-result caching, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -30,9 +30,16 @@ The standalone downloader lives in `src/wxcli/media/downloader.py`. It currently
 - safe JPEG, PNG, static WebP, and first-frame GIF decoding with media-type, integrity, dimension,
   and pixel-limit checks.
 
-The downloader is an internal primitive and is not yet connected to Article Evidence, Media
-Evidence orchestration, the Media Cache, or a CLI control. Therefore the existing 0.5.1 commands
-still perform no media downloads.
+The original-byte cache lives in `src/wxcli/media/cache.py`. It stores public image bytes by their
+verified SHA-256 and keeps separate hashed URL references, so identical content is stored once.
+Writes use sibling temporary files and atomic replacement. Reads recompute the byte hash, refresh
+LRU access only after successful verification, and remove corrupt or expired entries individually.
+Cleanup expires references first, removes orphan blobs, and then deterministically evicts the least
+recently used references until the complete cache is within its configurable hard cap of 1 GB.
+
+The downloader and cache are internal primitives and are not yet connected to Article Evidence,
+Media Evidence orchestration, or a CLI control. Therefore the existing 0.5.1 commands still perform
+no media downloads. Derived QR/OCR result caching remains deferred until those analyzers exist.
 
 ## Goal and non-goals
 

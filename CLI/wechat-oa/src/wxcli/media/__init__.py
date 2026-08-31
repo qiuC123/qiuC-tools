@@ -1,5 +1,13 @@
 """Versioned media-analysis models and bounded download primitives."""
 
+from wxcli.media.cache import (
+    MAX_MEDIA_CACHE_BYTES,
+    MEDIA_CACHE_SCHEMA_VERSION,
+    MEDIA_CACHE_TTL,
+    CachedMedia,
+    MediaCache,
+    MediaCacheCleanup,
+)
 from wxcli.media.downloader import (
     APPROVED_MEDIA_HOSTS,
     DownloadedMedia,
@@ -33,14 +41,20 @@ from wxcli.media.models import (
 
 __all__ = [
     "APPROVED_MEDIA_HOSTS",
+    "CachedMedia",
     "DownloadedMedia",
     "HostResolver",
+    "MAX_MEDIA_CACHE_BYTES",
+    "MEDIA_CACHE_SCHEMA_VERSION",
+    "MEDIA_CACHE_TTL",
     "MEDIA_EVIDENCE_EXTRACTOR_VERSION",
     "MEDIA_EVIDENCE_SCHEMA_VERSION",
     "MEDIA_RESULT_SCHEMA_VERSION",
     "MediaAnalysisConfiguration",
     "MediaAnalysisLimits",
     "MediaAnalysisResult",
+    "MediaCache",
+    "MediaCacheCleanup",
     "MediaDownloader",
     "MediaDownloadFailure",
     "MediaEvidence",
