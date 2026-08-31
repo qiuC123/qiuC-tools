@@ -1,0 +1,3 @@
+# Separate discovery candidates from article evidence
+
+External search results remain Article Candidates until an explicitly requested Hydration successfully reads the WeChat source and produces Article Evidence; failed reads produce Hydration Attempts instead of incomplete Articles. Discovery Providers remain separate from Content Providers so search provenance cannot be mistaken for WeChat source provenance, while caller-owned company-to-account mappings may be compared by wxcli without moving company, recruitment-batch, website, or ATS ownership into wxcli. External links are handed to callers as evidence and are never followed by wxcli.

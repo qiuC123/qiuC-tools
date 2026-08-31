@@ -1,0 +1,27 @@
+# Keep media analysis separate from core Article Evidence
+
+Status: accepted
+
+wxcli 0.6.0 will add optional Media Analysis without changing the implemented Article Evidence schema v1 or the meaning of `content_sha256` and `evidence_sha256`. Derived image, QR, and OCR observations belong to a separately versioned Media Evidence document linked to the source Article Evidence by `content_sha256`. This preserves compatibility for existing callers and prevents OCR text from being mistaken for text observed in the WeChat Article source.
+
+Media Analysis is disabled by default. It may be enabled by an explicit local CLI control or by a trusted Direct Discovery Request for that invocation. Candidate Batch data cannot enable it. Core Article Evidence must exist before Media Analysis begins; an individual media failure never invalidates successfully read Article Evidence and is instead represented by a partial Media Evidence result with per-image outcomes.
+
+Downloads are limited to HTTPS image URLs already referenced by the Article and hosted on an approved WeChat media-host allowlist. Every redirect and resolved address is revalidated; local, private, non-HTTPS, unknown-host, and unsafe destinations are rejected. Media requests send no Browser Session Cookie, authorization value, API key, or caller header. QR payloads are inert evidence and are never opened or followed. OCR remains local-only and has no automatic cloud fallback.
+
+Media work is resource bounded. One image is limited to 10 MB and 20 seconds, one Article to 50 images and 100 MB, and one batch to 200 images and 400 MB. A command without Media Analysis retains the 0.5.0 ten-minute deadline. An explicitly media-enabled command has a twenty-minute deadline: Article Hydration remains limited to its first ten minutes and media processing may use only the remaining time, never more than ten minutes.
+
+Identical downloaded bytes are keyed by SHA-256 and analyzed once while every Article image occurrence retains its own source mapping. The Media Cache expires entries after seven days and is capped at 1 GB; it stores no request secrets and has a dedicated clear command. An explicitly requested Evidence Bundle is not a cache: it is staged and atomically renamed into a destination that must not already exist, and wxcli never overwrites an existing path.
+
+Version 0.6.0 supports bounded raster inputs only: JPEG, PNG, static WebP, and the first frame of GIF. SVG and malformed images are rejected, and decoded dimensions are capped at 40 million pixels to resist decompression bombs. Standard QR decoding uses a packaged local analyzer; OCR initially uses the local Windows OCR capability and installed language data. Capability inspection is read-only and never downloads an engine or language pack. Missing OCR remains a per-image `ocr_unavailable` result with no cloud fallback.
+
+Derived text and payloads are bounded and inert. OCR performs only Unicode, newline, and control-character normalization, never semantic correction; it is limited to 50,000 characters per image and 1,000,000 per batch. A single image yields at most 20 QR payloads of at most 4 KB each. Analyzer identity, version, language, and configuration participate in cache validity, so raw image bytes may be reused after an upgrade while stale derived results are recomputed.
+
+Bundle paths receive Windows reparse-point and existing-path checks, and generated names use only indexes and hashes. Bundles contain the original analyzed bytes by default, with a metadata-only option; images are not recompressed. Download concurrency is capped at four and local analysis concurrency at two, while evidence ordering remains deterministic by Article and image index.
+
+Media-enabled request and outer result documents use schema v2, while every non-media schema-v1 request and result remains unchanged. Embedded Article Evidence remains schema v1 and the new Media Evidence begins at its own schema v1. Candidate Batch input remains schema v1; only a local CLI control or trusted Direct Discovery Request schema v2 may enable media work.
+
+Per-image status remains the small stable set `analyzed`, `skipped`, or `failed`, with a separate categorical reason. Chinese OCR defaults explicitly to `zh-Hans` and never silently follows the machine locale. Network errors retry once, HTTP 429 may wait at most ten seconds and retry once, and authentication, permission, format, resource-limit, or safety failures do not retry or switch sources.
+
+Cached bytes are verified against SHA-256 before use. Corrupt entries are removed individually; expiry runs before least-recently-used eviction under the 1 GB cap. A requested Bundle is part of command success: path validation runs before network work and any later bundle-write failure returns nonzero after guarded staging cleanup. Interruption stops new work, closes resources, rolls back incomplete cache transactions, and removes only incomplete staging data.
+
+The standard-QR analyzer is a required packaged capability; a missing packaged analyzer fails the build. Windows OCR is an optional operating-system capability and never prevents wxcli startup. Offline packaged acceptance exercises capability reporting, QR fixtures, OCR-unavailable behavior, and atomic bundle creation. Live fixtures and outputs require explicit authorization, stay in ignored temporary acceptance locations, and are reported only through statistics and sanitized summaries.
