@@ -80,6 +80,9 @@ wechat-oa browser policy set never
 
 ```powershell
 wechat-oa --json cache clear
+wechat-oa --json media cache clear
 ```
 
-只清理公共文章成功缓存。由于它会删除本地数据，必须由用户明确请求。
+第一个命令只清理公共文章成功缓存；第二个命令只清理经过校验的公开图片 Media Cache。
+两者都不会清理发现历史、浏览器状态或凭据。由于它们会删除本地数据，必须由用户明确
+请求，不能把其中一个命令当成“清理全部缓存”。

@@ -31,6 +31,7 @@ from wxcli.draft_import import PreparedDraft
 from wxcli.draft_update import DraftUpdatePlanner
 from wxcli.errors import ErrorCode, ExitCode, InputError, ValidationError, WxcliError
 from wxcli.evidence import EvidenceService
+from wxcli.media import MediaCache
 from wxcli.discovery.auth import DiscoverySecretStore
 from wxcli.discovery.brave import BraveDiscoveryProvider
 from wxcli.discovery.ingestion import CandidateIngestionService
@@ -67,6 +68,8 @@ published_app = typer.Typer(help="Read published messages by article_id.")
 discovery_app = typer.Typer(help="Discover public WeChat articles through external search.")
 discovery_auth_app = typer.Typer(help="Configure discovery-provider credentials.")
 discovery_cache_app = typer.Typer(help="Manage discovery search state only.")
+media_app = typer.Typer(help="Manage optional derived media-analysis state.")
+media_cache_app = typer.Typer(help="Manage the dedicated public-image Media Cache.")
 app.add_typer(article_app, name="article")
 app.add_typer(cache_app, name="cache")
 app.add_typer(browser_app, name="browser")
@@ -78,6 +81,8 @@ account_app.add_typer(draft_app, name="draft")
 account_app.add_typer(published_app, name="published")
 discovery_app.add_typer(discovery_auth_app, name="auth")
 discovery_app.add_typer(discovery_cache_app, name="cache")
+app.add_typer(media_app, name="media")
+media_app.add_typer(media_cache_app, name="cache")
 
 
 def default_cache() -> ArticleCache:
@@ -105,6 +110,11 @@ def default_runtime_root() -> Path:
 def default_discovery_store() -> DiscoveryStore:
     """Return the discovery-only cache, history, and checkpoint state."""
     return DiscoveryStore(default_runtime_root() / "discovery" / "state.sqlite3")
+
+
+def default_media_cache() -> MediaCache:
+    """Return the dedicated non-secret cache for validated public image bytes."""
+    return MediaCache(default_runtime_root() / "media-cache")
 
 
 def default_discovery_secrets() -> DiscoverySecretStore:
@@ -487,6 +497,13 @@ def clear_cache(context: typer.Context) -> None:
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     output.success({"cleared": default_cache().clear()})
+
+
+@media_cache_app.command("clear")
+def media_cache_clear(context: typer.Context) -> None:
+    """Delete only dedicated Media Cache records."""
+    output = _output(context)
+    output.success({"cleared": default_media_cache().clear()})
 
 
 @browser_app.command("login")

@@ -353,6 +353,39 @@ def test_download_enforces_actual_bytes_when_content_length_is_misleading() -> N
     assert raised.value.reason == MediaItemReason.TOO_LARGE
 
 
+def test_download_accepts_a_lower_per_call_byte_budget() -> None:
+    transport = httpx.MockTransport(
+        lambda _: httpx.Response(
+            200,
+            stream=ChunkedBody(b"12345", b"6"),
+            headers={"Content-Type": "image/png"},
+        )
+    )
+
+    with pytest.raises(MediaDownloadFailure) as raised:
+        downloader(transport).download(IMAGE_URL, max_bytes=5)
+
+    assert raised.value.reason == MediaItemReason.TOO_LARGE
+
+
+def test_cached_bytes_are_redecoded_without_dns_or_http() -> None:
+    content = image_bytes("PNG")
+    resolver = StubResolver("8.8.8.8")
+    transport = httpx.MockTransport(lambda _: pytest.fail("cache validation must be offline"))
+
+    result = downloader(transport, resolver=resolver).validate_cached(
+        source_url=IMAGE_URL,
+        final_url="https://mmbiz.qpic.cn/final/640",
+        content=content,
+        media_type="image/png",
+        max_bytes=len(content),
+    )
+
+    assert result.content == content
+    assert result.final_url == "https://mmbiz.qpic.cn/final/640"
+    assert resolver.calls == []
+
+
 def test_download_rejects_http_content_encoding_before_decoding() -> None:
     transport = httpx.MockTransport(
         lambda _: httpx.Response(

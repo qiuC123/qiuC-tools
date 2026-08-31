@@ -109,6 +109,9 @@ wechat-oa --json browser policy status
 # 清除公共文章成功缓存
 wechat-oa cache clear
 
+# 只清除独立的公开图片 Media Cache
+wechat-oa media cache clear
+
 # 交互式录入官方接口凭证，以及只报告“是否存在”的状态
 wechat-oa auth configure
 wechat-oa auth status
@@ -154,7 +157,7 @@ wechat-oa doctor --allow-live-api
 - 默认最多返回 50 个候选。启用回读后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
 - `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
 - `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
-- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。0.6.0 的 Media Evidence 数据模型和独立安全图片下载器已经实现；下载器尚未接入 CLI，缓存、二维码、OCR 和 Evidence Bundle 也未接入运行时，因此 0.5.1 命令仍不提供媒体分析能力。
+- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。0.6.0 的 Media Evidence 数据模型、安全图片下载器、原始字节缓存和文章级限额编排已经实现；它们尚未接入 CLI，二维码、OCR 和 Evidence Bundle 也未接入运行时，因此 0.5.1 命令仍不提供媒体分析能力。
 - 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
 
 完整 schema、部分成功语义和验收口径见 [文章发现说明](docs/article-discovery.md)。

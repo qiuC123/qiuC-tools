@@ -87,7 +87,7 @@ discovery as a complete WeChat index.
   visible wechat-oa Chrome profile.
 - Do not run `auth configure`, `discovery auth configure`, `auth test
   --allow-live-api`, `doctor --allow-live-api`, `browser clear`, `cache clear`,
-  or `discovery cache clear` unless the user explicitly
+  `discovery cache clear`, or `media cache clear` unless the user explicitly
   requests the corresponding action.
 - Treat `browser status` as local facts only. It does not prove that the remote
   WeChat session is currently valid.

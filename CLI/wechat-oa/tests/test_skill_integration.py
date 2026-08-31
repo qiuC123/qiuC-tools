@@ -132,6 +132,7 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "browser policy set auto-fallback" in skill
     assert "images[]" in skill
     assert "import-word --confirm" in skill
+    assert "media cache clear" in skill
     assert "未发布草稿" in references
     assert "AppSecret" in references
     assert "绕过验证" in references

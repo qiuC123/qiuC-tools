@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models and standalone safe image downloader are implemented; cache, orchestration, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, and article-level acquisition orchestration are implemented; analysis orchestration, derived-result caching, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -30,9 +30,25 @@ The standalone downloader lives in `src/wxcli/media/downloader.py`. It currently
 - safe JPEG, PNG, static WebP, and first-frame GIF decoding with media-type, integrity, dimension,
   and pixel-limit checks.
 
-The downloader is an internal primitive and is not yet connected to Article Evidence, Media
-Evidence orchestration, the Media Cache, or a CLI control. Therefore the existing 0.5.1 commands
-still perform no media downloads.
+The original-byte cache lives in `src/wxcli/media/cache.py`. It stores public image bytes by their
+verified SHA-256 and keeps separate hashed URL references, so identical content is stored once.
+Writes use sibling temporary files and atomic replacement. Reads recompute the byte hash, refresh
+LRU access only after successful verification, and remove corrupt or expired entries individually.
+Cleanup expires references first, removes orphan blobs, and then deterministically evicts the least
+recently used references until the complete cache is within its configurable hard cap of 1 GB.
+
+Article-level acquisition lives in `src/wxcli/media/orchestration.py`. It consumes only the existing
+`Article.images` sequence, keeps source order, applies the configured per-image and per-Article
+limits before each request, isolates per-item failures, and treats cache I/O as best-effort rather
+than a reason to lose valid downloaded media. Results contain at most the configured image-count
+limit and record a bounded `omitted_count` instead of creating an unbounded list of skip records.
+Every admitted occurrence counts toward the Article byte budget, including a repeated URL served
+from cache, so downstream decode and analysis memory remains bounded; the cache still avoids the
+second network request.
+
+The acquisition layer is an internal primitive and is not yet connected to Article Evidence,
+Media Evidence analysis, or a CLI control. Therefore the existing 0.5.1 commands still perform no
+media downloads. Derived QR/OCR result caching remains deferred until those analyzers exist.
 
 ## Goal and non-goals
 
@@ -121,7 +137,7 @@ Default hard limits are:
 | Hydration inside a media-enabled command | First 10 minutes at most |
 | Media phase | Remaining time, at most 10 minutes |
 
-Limits apply to downloaded bytes, not only declared `Content-Length`. Once a limit is exhausted, completed Article and Media Evidence remains available and unattempted items receive bounded-limit outcomes. Media ordering follows Article/candidate order and then image index so the partial result is deterministic.
+Limits apply to downloaded bytes, not only declared `Content-Length`. Once a byte or time limit is exhausted, completed Article and Media Evidence remains available and selected but unattempted items receive bounded-limit outcomes. An Article with more image occurrences than its configured image-count limit keeps only the bounded prefix and records the number omitted. Media ordering follows Article/candidate order and then image index so the partial result is deterministic.
 
 At most four images download concurrently and at most two local image analyses run concurrently. Concurrency never changes evidence order: results are emitted by Article/candidate order and then Article image index.
 
@@ -162,7 +178,7 @@ Every cache read recomputes and verifies the expected byte SHA-256 before decodi
 The approved clear command is:
 
 ```powershell
-wxcli media cache clear
+wechat-oa --json media cache clear
 ```
 
 It does not clear Article Cache, discovery history/checkpoints, Browser Session state, Browser Fallback Policy, credentials, or Evidence Bundles.
