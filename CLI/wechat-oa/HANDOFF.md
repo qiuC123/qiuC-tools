@@ -29,7 +29,7 @@
 - canonical 源码已迁入 `https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`；原 `qiuC123/wechat-oa` 暂时保留为迁移兼容仓库，不再作为后续开发目标。
 - 正式发布包通过 GitHub Release 分发；本地 `dist\` 仍被 Git 忽略，不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
-- `main` 已包含 0.6.0 独立安全图片下载器；当前开发分支继续实现了原始字节 Media Cache 和文章级数量/总字节编排。完整回归与远程 CI 结果应以该分支最终提交和 PR 为准；`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
+- `main` 已包含 0.6.0 独立安全图片下载器；当前开发分支继续实现了原始字节 Media Cache、文章级数量/总字节编排和独立缓存清理命令。本地完整回归为 317 项 pytest 通过、mypy 检查 41 个源文件无错误，远程结果以该分支 PR 的必需 CI 为准；`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
 
 ### 下一步计划
 
