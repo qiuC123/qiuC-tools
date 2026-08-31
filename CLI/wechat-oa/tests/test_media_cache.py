@@ -144,6 +144,20 @@ def test_cache_clear_removes_only_cache_records(tmp_path: Path) -> None:
     assert cache.clear() == 0
 
 
+def test_cache_discard_preserves_a_blob_shared_by_another_url(tmp_path: Path) -> None:
+    cache = MediaCache(tmp_path / "media")
+    content = b"shared"
+    first = media("https://mmbiz.qpic.cn/first/640", content)
+    second = media("https://mmbiz.qpic.cn/second/640", content)
+    cache.put(first)
+    cache.put(second)
+
+    assert cache.discard(first.source_url) is True
+    assert cache.get(first.source_url) is None
+    assert cache.get(second.source_url) is not None
+    assert cache.discard(first.source_url) is False
+
+
 @pytest.mark.parametrize(
     "options",
     [

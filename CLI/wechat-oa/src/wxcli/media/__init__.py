@@ -38,9 +38,19 @@ from wxcli.media.models import (
     QRStatus,
     build_media_evidence,
 )
+from wxcli.media.orchestration import (
+    ArticleMediaDownloader,
+    ArticleMediaDownloads,
+    BoundedMediaDownloader,
+    MediaAcquisitionItem,
+    MediaAcquisitionStatus,
+)
 
 __all__ = [
     "APPROVED_MEDIA_HOSTS",
+    "ArticleMediaDownloader",
+    "ArticleMediaDownloads",
+    "BoundedMediaDownloader",
     "CachedMedia",
     "DownloadedMedia",
     "HostResolver",
@@ -53,6 +63,8 @@ __all__ = [
     "MediaAnalysisConfiguration",
     "MediaAnalysisLimits",
     "MediaAnalysisResult",
+    "MediaAcquisitionItem",
+    "MediaAcquisitionStatus",
     "MediaCache",
     "MediaCacheCleanup",
     "MediaDownloader",

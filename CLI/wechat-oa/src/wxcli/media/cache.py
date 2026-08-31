@@ -80,6 +80,9 @@ class MediaCache:
 
     def get(self, source_url: str) -> CachedMedia | None:
         """Return hash-verified bytes and refresh LRU access, or remove one invalid entry."""
+        if not self.directory.exists():
+            return None
+        self._ensure_safe_directories()
         path = self._reference_path(source_url)
         reference = self._read_reference(path)
         if reference is None or reference.source_url != source_url:
@@ -212,6 +215,19 @@ class MediaCache:
             evicted_references=evicted_references,
             evicted_blobs=evicted_blobs,
         )
+
+    def discard(self, source_url: str) -> bool:
+        """Remove one URL reference and its blob only when no other reference uses it."""
+        if not self.directory.exists():
+            return False
+        self._ensure_safe_directories()
+        path = self._reference_path(source_url)
+        reference = self._read_reference(path)
+        existed = path.exists() or _is_link_like(path)
+        path.unlink(missing_ok=True)
+        if reference is not None:
+            self._remove_blob_if_unreferenced(reference.byte_sha256)
+        return existed
 
     def clear(self) -> int:
         """Remove only Media Cache records and temporary files, never other wxcli state."""

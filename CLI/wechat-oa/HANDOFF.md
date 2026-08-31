@@ -29,13 +29,13 @@
 - canonical 源码已迁入 `https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`；原 `qiuC123/wechat-oa` 暂时保留为迁移兼容仓库，不再作为后续开发目标。
 - 正式发布包通过 GitHub Release 分发；本地 `dist\` 仍被 Git 忽略，不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
-- 当前开发分支已实现 0.6.0 独立安全图片下载器；本地完整回归为 287 项 pytest 通过、mypy 检查 39 个源文件无错误，远程结果以该分支 PR 的必需 CI 为准。`main` 最近确认结果为 249 项 pytest 通过、mypy 检查 38 个源文件无错误；`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
+- `main` 已包含 0.6.0 独立安全图片下载器；当前开发分支继续实现了原始字节 Media Cache 和文章级数量/总字节编排。完整回归与远程 CI 结果应以该分支最终提交和 PR 为准；`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
 
 ### 下一步计划
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 0.6.0 的 Media Evidence 数据模型和独立安全图片下载器已经完成；下一步实现文章级数量/总字节编排和媒体缓存。随后接入本地二维码识别与 Windows OCR，最后实现可审计的 Evidence Bundle。
+1. 0.6.0 的 Media Evidence 数据模型、安全图片下载器、原始字节 Media Cache 和文章级数量/总字节编排已经完成；下一步接入本地二维码识别与 Windows OCR，再完成分析编排、CLI 控制和可审计的 Evidence Bundle。
 2. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
 3. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
 

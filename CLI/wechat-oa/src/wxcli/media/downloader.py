@@ -134,8 +134,9 @@ class MediaDownloader:
         self._max_pixels = max_pixels
         self._timeout_seconds = timeout_seconds
 
-    def download(self, source_url: str) -> DownloadedMedia:
+    def download(self, source_url: str, *, max_bytes: int | None = None) -> DownloadedMedia:
         """Download and safely decode one image; never follow an unvalidated redirect."""
+        effective_max_bytes = self._effective_max_bytes(max_bytes)
         current_url = self._normalize_destination(source_url)
         redirect_urls: list[str] = []
         deadline = self._clock() + self._timeout_seconds
@@ -152,7 +153,12 @@ class MediaDownloader:
             headers=headers,
         ) as client:
             while True:
-                result = self._request_with_retry(client, current_url, deadline)
+                result = self._request_with_retry(
+                    client,
+                    current_url,
+                    deadline,
+                    effective_max_bytes,
+                )
                 if isinstance(result, _Payload):
                     return self._validate_payload(
                         source_url=source_url,
@@ -167,11 +173,45 @@ class MediaDownloader:
                 current_url = self._normalize_destination(urljoin(current_url, result.location))
                 redirect_urls.append(current_url)
 
+    def validate_cached(
+        self,
+        *,
+        source_url: str,
+        final_url: str,
+        content: bytes,
+        media_type: str,
+        max_bytes: int | None = None,
+    ) -> DownloadedMedia:
+        """Revalidate hash-checked cache bytes without performing DNS or network access."""
+        effective_max_bytes = self._effective_max_bytes(max_bytes)
+        self._normalize_destination(source_url)
+        normalized_final_url = self._normalize_destination(final_url)
+        if not content:
+            raise MediaDownloadFailure(
+                MediaItemReason.MALFORMED_IMAGE,
+                "Cached image was empty.",
+            )
+        if len(content) > effective_max_bytes:
+            raise MediaDownloadFailure(
+                MediaItemReason.TOO_LARGE,
+                "Cached image exceeds the remaining byte limit.",
+            )
+        return self._validate_payload(
+            source_url=source_url,
+            redirect_urls=(),
+            payload=_Payload(
+                url=normalized_final_url,
+                content_type=media_type,
+                content=content,
+            ),
+        )
+
     def _request_with_retry(
         self,
         client: httpx.Client,
         url: str,
         deadline: float,
+        max_bytes: int,
     ) -> _Payload | _Redirect:
         last_error: httpx.RequestError | None = None
         for attempt in range(2):
@@ -213,12 +253,12 @@ class MediaDownloader:
                             "Encoded HTTP image bodies are not accepted as original media bytes.",
                         )
                     content_length = _content_length(response.headers.get("content-length"))
-                    if content_length is not None and content_length > self._max_bytes:
+                    if content_length is not None and content_length > max_bytes:
                         raise MediaDownloadFailure(
                             MediaItemReason.TOO_LARGE,
                             "Image exceeds the configured byte limit.",
                         )
-                    content = self._read_bounded(response.iter_bytes())
+                    content = self._read_bounded(response.iter_bytes(), max_bytes=max_bytes)
                     return _Payload(
                         url=url,
                         content_type=response.headers.get("content-type"),
@@ -252,10 +292,10 @@ class MediaDownloader:
             )
         return remaining
 
-    def _read_bounded(self, chunks: Iterable[bytes]) -> bytes:
+    def _read_bounded(self, chunks: Iterable[bytes], *, max_bytes: int) -> bytes:
         content = bytearray()
         for chunk in chunks:
-            if len(content) + len(chunk) > self._max_bytes:
+            if len(content) + len(chunk) > max_bytes:
                 raise MediaDownloadFailure(
                     MediaItemReason.TOO_LARGE,
                     "Image exceeds the configured byte limit.",
@@ -267,6 +307,13 @@ class MediaDownloader:
                 "Image response was empty.",
             )
         return bytes(content)
+
+    def _effective_max_bytes(self, requested: int | None) -> int:
+        if requested is None:
+            return self._max_bytes
+        if not 1 <= requested <= MAX_IMAGE_BYTES:
+            raise ValueError(f"max_bytes must be between 1 and {MAX_IMAGE_BYTES}.")
+        return min(requested, self._max_bytes)
 
     def _normalize_destination(self, url: str) -> str:
         try:
