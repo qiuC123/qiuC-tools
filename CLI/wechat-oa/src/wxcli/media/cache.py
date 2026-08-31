@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -182,10 +183,13 @@ class MediaCache:
 
         referenced_hashes = {reference.byte_sha256 for reference in references}
         orphaned = 0
+        blob_sizes: dict[str, int] = {}
         for blob in sorted(self._blobs.glob("*.bin"), key=lambda item: item.name):
             if blob.stem not in referenced_hashes or not _is_sha256(blob.stem) or _is_link_like(blob):
                 blob.unlink(missing_ok=True)
                 orphaned += 1
+            else:
+                blob_sizes[blob.stem] = _file_size(blob)
 
         available_references: list[_Reference] = []
         for reference in references:
@@ -195,17 +199,32 @@ class MediaCache:
                 reference.path.unlink(missing_ok=True)
                 invalid += 1
         references = available_references
+        reference_counts = Counter(reference.byte_sha256 for reference in references)
+        current_size = sum(_file_size(reference.path) for reference in references) + sum(
+            blob_sizes.values()
+        )
         evicted_references = 0
         evicted_blobs = 0
         for reference in sorted(
             references,
             key=lambda item: (item.last_accessed_at, item.path.name),
         ):
-            if self._current_size() <= self.max_size_bytes:
+            if current_size <= self.max_size_bytes:
                 break
+            reference_size = _file_size(reference.path)
             reference.path.unlink(missing_ok=True)
+            current_size -= reference_size
             evicted_references += 1
-            if self._remove_blob_if_unreferenced(reference.byte_sha256):
+            reference_counts[reference.byte_sha256] -= 1
+            if reference_counts[reference.byte_sha256] == 0:
+                blob = self._blob_path(reference.byte_sha256)
+                blob_size = blob_sizes.pop(reference.byte_sha256, 0)
+                existed = blob.exists() or _is_link_like(blob)
+                blob.unlink(missing_ok=True)
+                current_size -= blob_size
+            else:
+                existed = False
+            if existed:
                 evicted_blobs += 1
 
         return MediaCacheCleanup(
@@ -311,16 +330,6 @@ class MediaCache:
         blob.unlink(missing_ok=True)
         return existed
 
-    def _current_size(self) -> int:
-        paths = tuple(self._references.glob("*.json")) + tuple(self._blobs.glob("*.bin"))
-        size = 0
-        for path in paths:
-            try:
-                size += path.lstat().st_size
-            except OSError:
-                continue
-        return size
-
     def _reference_path(self, source_url: str) -> Path:
         digest = hashlib.sha256(source_url.encode("utf-8")).hexdigest()
         return self._references / f"{digest}.json"
@@ -345,6 +354,13 @@ def _atomic_write(path: Path, content: bytes) -> None:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.lstat().st_size
+    except OSError:
+        return 0
 
 
 def _is_sha256(value: str) -> bool:

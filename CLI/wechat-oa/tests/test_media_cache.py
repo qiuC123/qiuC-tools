@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -113,6 +114,31 @@ def test_cleanup_evicts_least_recently_used_reference_first(tmp_path: Path) -> N
     assert cache.get(first.source_url) is not None
     assert cache.get(second.source_url) is None
     assert cache.get(third.source_url) is not None
+
+
+def test_cleanup_parses_each_reference_once_during_lru_eviction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "media"
+    seed = MediaCache(root, max_size_bytes=10_000)
+    urls = [f"https://mmbiz.qpic.cn/{index}/640" for index in range(4)]
+    for index, url in enumerate(urls):
+        seed.put(media(url, bytes([index]) * 256))
+    bounded = MediaCache(root, max_size_bytes=1)
+    calls: Counter[Path] = Counter()
+    read_reference = bounded._read_reference
+
+    def counting_read(path: Path):
+        calls[path] += 1
+        return read_reference(path)
+
+    monkeypatch.setattr(bounded, "_read_reference", counting_read)
+
+    result = bounded.cleanup()
+
+    assert result.evicted_references == 4
+    assert set(calls.values()) == {1}
 
 
 def test_cache_does_not_store_item_larger_than_its_total_cap(tmp_path: Path) -> None:
