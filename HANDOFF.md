@@ -1,5 +1,53 @@
 # WeChat OA 项目交接说明
 
+## 新项目接续摘要（2026-08-31）
+
+### 当前工作位置
+
+- 源码已经从 `E:\devlop\WxCLi` 迁移到 `E:\devlop\Wechat-develop\wechat-oa`。
+- 新目录中的 Git 仓库完整，虚拟环境已经重新绑定并验证可用。
+- 旧目录 `E:\devlop\WxCLi` 已经清空，但当时被原 Codex 任务占用，尚未创建目录联接；关闭旧任务后可以删除。
+- 旧对话记录的工作目录仍是旧路径，不能自动改写。后续开发应在 Codex 的 `wechat-oa` 新项目中创建新任务，并先阅读本文件。
+
+### 已经完成
+
+- 0.5.0 的浏览器兜底可靠性、真实外部搜索、微信原文回读和一次性可见 Chrome 验收已经完成。
+- 产品在 0.5.1 正式命名为 **WeChat OA / 微信公众号助手**，首选命令和首选 Skill 均为 `wechat-oa`。
+- 旧 `wxcli` 命令、Python 包名、运行状态目录、凭据标识和证据 provenance 全部保留兼容，因此招聘雷达不需要修改。
+- Windows 0.5.1 发布包已经构建、安装并完成 0.5.1 → 0.5.0 → 0.5.1 双向回滚验收。
+- Agent Reach 已优先探测 `wechat-oa`，缺失时回退到 `wxcli`；doctor 实测微信公众号后端为 0.5.1、状态正常。
+- 招聘雷达保持原代码不变，实测通过 `wxcli` 获取 0.5.1，并完成 schema-v1 空候选回读管道。
+- `qiuC123/qiuC-skills` 的 PR #3 已合并。远程仓库同时保留正式 `wechat-oa` Skill 和兼容 `wxcli` Skill。
+
+### 当前 Git 与发布状态
+
+- 当前分支：`codex/wechat-oa-rename`。
+- 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
+- 本地标签：`v0.5.1`。
+- 本地 `main` 仍停在 0.5.0 的 `cff45af`，0.5.1 尚未快进合并到 `main`。
+- 当前源码仓库没有配置 Git remote；`qiuC123` 账号下也还没有独立的 `wechat-oa` 源码仓库。
+- 正式发布包：`dist\release\wechat-oa-0.5.1-windows-x64.zip`。
+- SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
+- 完整回归结果：237 项 pytest 通过；mypy 检查 36 个源文件无错误；两个 Skill 均通过规范校验。
+
+### 下一步计划
+
+按以下顺序推进，避免同时做版本治理和新功能：
+
+1. 先复核 `codex/wechat-oa-rename`，把它快进合并到本地 `main`，确保 0.5.1 成为后续开发唯一基线。
+2. 由用户确认 GitHub 源码仓库后，使用 `wechat-oa` 作为仓库名，配置 remote，并推送 `main` 与 `v0.5.1`。不要把源码仓库错误地推到 `qiuC-skills`。
+3. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
+4. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
+5. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
+
+### 必须保持的边界
+
+- WeChat OA 负责微信公众号文章、图片和草稿证据，不负责企业、招聘批次、岗位、ATS 或投递判断。
+- 二维码内容只作为惰性证据返回，绝不自动打开、跳转或执行。
+- OCR 默认使用本地能力，不把公众号图片上传到远程 OCR 服务。
+- 不发布、不群发、不删除内容；已有草稿仍必须经过备份、差异、冻结计划、显式确认和回读验证。
+- 不迁移 `%LOCALAPPDATA%\wxcli`、`%LOCALAPPDATA%\Programs\wxcli`、Windows 凭据键或历史 `wxcli` provenance；这些是有意保留的兼容接口。
+
 ## 0.5.1 命名更新（2026-08-30）
 
 产品正式命名为 **WeChat OA / 微信公众号助手**，首选 CLI 和 Agent Skill 标识均为 `wechat-oa`。旧 `wxcli` 可执行命令继续保留相同参数、JSON、退出码和运行状态；Python 包名、`%LOCALAPPDATA%\wxcli` 数据目录、Windows 凭据标识与历史证据 provenance 也保持不变。因此招聘雷达和既有自动化无需修改。
