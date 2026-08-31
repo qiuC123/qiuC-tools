@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "CLI/wechat-oa/**"
-      - ".github/workflows/wechat-oa-ci.yml"
   pull_request:
-    paths:
-      - "CLI/wechat-oa/**"
-      - ".github/workflows/wechat-oa-ci.yml"
   workflow_dispatch:
 
 permissions:
