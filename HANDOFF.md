@@ -26,20 +26,19 @@
 - `v0.5.1` 指向上述验收提交；本交接文档位于其后的文档提交中，因此接手时应以 `git log -1 --oneline` 获取实际 HEAD，不要把验收提交误认为分支顶端。
 - 本地标签：`v0.5.1`。
 - 本地 `main` 已包含 0.5.1 命名更新、验收记录和本交接文档修正。
-- 当前源码仓库没有配置 Git remote；`qiuC123` 账号下也还没有独立的 `wechat-oa` 源码仓库。
+- 当前源码仓库已配置 `origin` 为 `https://github.com/qiuC123/wechat-oa.git`，本地 `main` 与 `v0.5.1` 已推送。
 - 本机正式发布包：`dist\release\wechat-oa-0.5.1-windows-x64.zip`。`dist\` 被 Git 忽略，该文件不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
-- 完整回归结果：237 项 pytest 通过；mypy 检查 36 个源文件无错误；两个 Skill 均通过规范校验。
+- 当前完整回归结果：238 项 pytest 通过；mypy 检查 36 个源文件无错误；两个 Skill 均通过规范校验。`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
 
 ### 下一步计划
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 由用户确认 GitHub 源码仓库后，使用 `wechat-oa` 作为仓库名，配置 remote，并推送 `main` 与 `v0.5.1`。不要把源码仓库错误地推到 `qiuC-skills`。
-2. 如果要对外分发 0.5.1，单独创建 GitHub Release，上传本机 Git 忽略的 ZIP 与 `.sha256` 文件，并在上传后重新核对哈希；只推送源码和标签不会包含发布包。
-3. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
-4. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
-5. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
+1. 如果要对外分发 0.5.1，单独创建 GitHub Release，上传本机 Git 忽略的 ZIP 与 `.sha256` 文件，并在上传后重新核对哈希；只推送源码和标签不会包含发布包。
+2. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
+3. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
+4. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
 
 ### 必须保持的边界
 
@@ -389,4 +388,4 @@ wechat-oa --json doctor
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，`v0.5.1` 指向 `af04cb2`，版本为 0.5.1，Doctor 默认不执行 live checks，测试 237 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
+预期结果：分支为 `main`，`v0.5.1` 指向 `af04cb2`，版本为 0.5.1，Doctor 默认不执行 live checks，当前 `main` 测试 238 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$AgentReachPython,
-    [string]$PersonalSkillsRoot
+    [string]$PersonalSkillsRoot,
+    [switch]$RefreshAgentReachSkill
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,8 +40,12 @@ if ([string]::IsNullOrWhiteSpace($packageRoot)) {
 $packageRoot = (Resolve-Path -LiteralPath $packageRoot).Path
 $registryPath = Join-Path $packageRoot "channels\__init__.py"
 $channelTarget = Join-Path $packageRoot "channels\wechat.py"
+$packageSkillRoot = Join-Path $packageRoot "skill"
 if (-not (Test-Path -LiteralPath $registryPath -PathType Leaf)) {
     throw "Agent Reach channel registry not found: $registryPath"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $packageSkillRoot "SKILL.md") -PathType Leaf)) {
+    throw "Agent Reach packaged Skill not found: $packageSkillRoot"
 }
 
 function Write-Utf8NoBom([string]$Path, [string]$Content) {
@@ -99,7 +104,34 @@ function Install-PersonalSkill([string]$Name, [string]$Source) {
     return $resolvedTarget
 }
 
+function Install-AgentReachPersonalSkill() {
+    $target = [System.IO.Path]::GetFullPath((Join-Path $PersonalSkillsRoot "agent-reach"))
+    $skillPath = Join-Path $target "SKILL.md"
+    if ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $skillPath -PathType Leaf)) {
+        throw "Agent Reach personal Skill path exists without SKILL.md; refusing to replace it: $target"
+    }
+
+    if (-not (Test-Path -LiteralPath $target)) {
+        Copy-Item -LiteralPath $packageSkillRoot -Destination $target -Recurse
+        return $target
+    }
+    if (-not $RefreshAgentReachSkill) {
+        return $target
+    }
+
+    $backupRoot = Join-Path $PersonalSkillsRoot ".wechat-oa-backups"
+    $backupTarget = Join-Path $backupRoot "agent-reach"
+    New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $backupTarget)) {
+        Copy-Item -LiteralPath $target -Destination $backupTarget -Recurse
+    }
+    Remove-Item -LiteralPath $target -Recurse -Force
+    Copy-Item -LiteralPath $packageSkillRoot -Destination $target -Recurse
+    return $target
+}
+
 New-Item -ItemType Directory -Path $PersonalSkillsRoot -Force | Out-Null
+$activeAgentReachSkill = Install-AgentReachPersonalSkill
 $personalSkillTarget = Install-PersonalSkill -Name "wechat-oa" -Source $sourceSkill
 $compatibilitySkillTarget = Install-PersonalSkill -Name "wxcli" -Source $sourceCompatibilitySkill
 
@@ -134,10 +166,10 @@ if (-not $registry.Contains('"WeChatChannel"')) {
 }
 Write-Utf8NoBom -Path $registryPath -Content $registry
 
-$activeAgentReachSkill = Join-Path $PersonalSkillsRoot "agent-reach"
 Add-AgentReachSkillRoute -SkillRoot $activeAgentReachSkill
-Add-AgentReachSkillRoute -SkillRoot (Join-Path $packageRoot "skill")
+Add-AgentReachSkillRoute -SkillRoot $packageSkillRoot
 
+Write-Output "Installed or patched Agent Reach skill: $activeAgentReachSkill"
 Write-Output "Installed WeChat OA skill: $personalSkillTarget"
 Write-Output "Installed wxcli compatibility skill: $compatibilitySkillTarget"
 Write-Output "Registered Agent Reach channel: $channelTarget"

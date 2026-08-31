@@ -77,3 +77,14 @@ def test_packaged_discovery_help_includes_candidate_hydration() -> None:
     assert "'search', 'hydrate', 'auth', 'cache'" in script
     assert "browser', 'policy', 'status'" in script
     assert "smoke-localappdata" in script
+
+
+def test_agent_reach_installer_can_refresh_the_official_personal_skill() -> None:
+    script = (ROOT / "scripts" / "install-agent-reach-integration.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "$packageSkillRoot" in script
+    assert "Install-AgentReachPersonalSkill" in script
+    assert "$RefreshAgentReachSkill" in script
+    assert '".wechat-oa-backups"' in script

@@ -21,6 +21,35 @@ mypy src
 wechat-oa --version
 ```
 
+## 与官方 Agent Reach 集成
+
+WeChat OA 不内置或分叉 Agent Reach。其他 Agent 应先按照
+[Agent Reach 官方安装说明](https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md)
+安装上游版本，再由本仓库的集成脚本注册微信公众号通道。Windows 上使用独立虚拟环境的可复现流程如下：
+
+```powershell
+# 1. 安装官方 Agent Reach；默认 install 只检查环境，不执行系统级安装
+py -3 -m venv "$env:USERPROFILE\.agent-reach-venv"
+& "$env:USERPROFILE\.agent-reach-venv\Scripts\python.exe" -m pip install `
+  https://github.com/Panniantong/agent-reach/archive/main.zip
+& "$env:USERPROFILE\.agent-reach-venv\Scripts\agent-reach.exe" install --env=auto
+
+# 2. 在已完成上方“环境与开发安装”的 WeChat OA 仓库根目录应用集成
+pwsh .\scripts\install-agent-reach-integration.ps1 `
+  -AgentReachPython "$env:USERPROFILE\.agent-reach-venv\Scripts\python.exe" `
+  -RefreshAgentReachSkill
+
+# 3. 保持当前 WeChat OA 开发虚拟环境已激活，执行只读验收
+& "$env:USERPROFILE\.agent-reach-venv\Scripts\agent-reach.exe" doctor --json
+```
+
+安装脚本会把 `wechat-oa` 与 `wxcli` 两个 Skill 复制到个人 Skill 目录，并把本仓库的
+`WeChatChannel` 注册到当前 Agent Reach 安装中。它是显式应用的本地集成，不会把
+Agent Reach 变成本仓库的分叉，也不会自动跟随上游更新。升级 Agent Reach 后应重新运行
+该脚本并再次执行 `doctor --json`；`-RefreshAgentReachSkill` 会从当前官方安装刷新个人
+Agent Reach Skill，首次刷新前的副本保存在个人 Skill 根目录的 `.wechat-oa-backups`。
+脚本会在上游注册表结构不兼容时拒绝盲目修改。
+
 ## 常用命令
 
 全局 `--json` 要放在子命令之前，例如 `wechat-oa --json article local .\article.md`。
