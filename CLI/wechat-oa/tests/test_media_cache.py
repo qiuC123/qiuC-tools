@@ -148,12 +148,13 @@ def test_cache_does_not_store_item_larger_than_its_total_cap(tmp_path: Path) -> 
     assert cache.get("https://mmbiz.qpic.cn/large/640") is None
 
 
-def test_cache_rejects_mismatched_input_hash(tmp_path: Path) -> None:
+def test_cache_rejects_mismatched_input_hash_before_filesystem_mutation(tmp_path: Path) -> None:
     cache = MediaCache(tmp_path / "media")
     item = media("https://mmbiz.qpic.cn/hash/640", b"valid")
 
     with pytest.raises(ValueError, match="SHA-256"):
         cache.put(replace(item, byte_sha256="f" * 64))
+    assert not cache.directory.exists()
 
 
 def test_cache_clear_removes_only_cache_records(tmp_path: Path) -> None:
