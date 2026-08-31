@@ -1,10 +1,10 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data-model foundation is implemented; image download, cache, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models and standalone safe image downloader are implemented; cache, orchestration, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
-## Implemented model foundation
+## Implemented foundations
 
 The model contract lives in `src/wxcli/media/models.py`. It currently provides:
 
@@ -18,8 +18,21 @@ The model contract lives in `src/wxcli/media/models.py`. It currently provides:
 - validation that Media Evidence links to the unchanged Article Evidence schema v1 through
   `content_sha256`.
 
-This foundation is a data contract only. It does not add an `--analyze-media` control, download
-an image, inspect a live capability, decode a QR payload, run OCR, or create a Bundle.
+The standalone downloader lives in `src/wxcli/media/downloader.py`. It currently provides:
+
+- a dedicated credential-free HTTP client that ignores environment proxies and manually validates
+  every redirect;
+- an initial exact allowlist containing only the tested article-image CDN host
+  `mmbiz.qpic.cn`;
+- HTTPS, authority, DNS, and public IPv4/IPv6 checks before every request and retry;
+- one bounded retry for DNS, transport, and timeout failures, plus one bounded HTTP 429 retry;
+- enforcement of actual streamed bytes as well as declared `Content-Length`; and
+- safe JPEG, PNG, static WebP, and first-frame GIF decoding with media-type, integrity, dimension,
+  and pixel-limit checks.
+
+The downloader is an internal primitive and is not yet connected to Article Evidence, Media
+Evidence orchestration, the Media Cache, or a CLI control. Therefore the existing 0.5.1 commands
+still perform no media downloads.
 
 ## Goal and non-goals
 
