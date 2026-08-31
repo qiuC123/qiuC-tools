@@ -6,7 +6,7 @@
 
 - 源码已经从 `E:\devlop\WxCLi` 迁移到 `E:\devlop\Wechat-develop\wechat-oa`。
 - 新目录中的 Git 仓库完整，虚拟环境已经重新绑定并验证可用。
-- 旧目录 `E:\devlop\WxCLi` 已经清空，但当时被原 Codex 任务占用，尚未创建目录联接；关闭旧任务后可以删除。
+- 旧目录 `E:\devlop\WxCLi` 已经清空，但当时被原 Codex 任务占用，尚未创建目录联接。关闭旧任务后需明确二选一：不再兼容旧对话就删除该空目录；仍需兼容旧工作目录就先删除空目录，再创建指向新目录的目录联接。
 - 旧对话记录的工作目录仍是旧路径，不能自动改写。后续开发应在 Codex 的 `wechat-oa` 新项目中创建新任务，并先阅读本文件。
 
 ### 已经完成
@@ -21,12 +21,13 @@
 
 ### 当前 Git 与发布状态
 
-- 当前分支：`codex/wechat-oa-rename`。
+- 当前分支：`main`；`codex/wechat-oa-rename` 已快进合并，0.5.1 是后续开发唯一基线。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
+- `v0.5.1` 指向上述验收提交；本交接文档位于其后的文档提交中，因此接手时应以 `git log -1 --oneline` 获取实际 HEAD，不要把验收提交误认为分支顶端。
 - 本地标签：`v0.5.1`。
-- 本地 `main` 仍停在 0.5.0 的 `cff45af`，0.5.1 尚未快进合并到 `main`。
+- 本地 `main` 已包含 0.5.1 命名更新、验收记录和本交接文档修正。
 - 当前源码仓库没有配置 Git remote；`qiuC123` 账号下也还没有独立的 `wechat-oa` 源码仓库。
-- 正式发布包：`dist\release\wechat-oa-0.5.1-windows-x64.zip`。
+- 本机正式发布包：`dist\release\wechat-oa-0.5.1-windows-x64.zip`。`dist\` 被 Git 忽略，该文件不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
 - 完整回归结果：237 项 pytest 通过；mypy 检查 36 个源文件无错误；两个 Skill 均通过规范校验。
 
@@ -34,8 +35,8 @@
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 先复核 `codex/wechat-oa-rename`，把它快进合并到本地 `main`，确保 0.5.1 成为后续开发唯一基线。
-2. 由用户确认 GitHub 源码仓库后，使用 `wechat-oa` 作为仓库名，配置 remote，并推送 `main` 与 `v0.5.1`。不要把源码仓库错误地推到 `qiuC-skills`。
+1. 由用户确认 GitHub 源码仓库后，使用 `wechat-oa` 作为仓库名，配置 remote，并推送 `main` 与 `v0.5.1`。不要把源码仓库错误地推到 `qiuC-skills`。
+2. 如果要对外分发 0.5.1，单独创建 GitHub Release，上传本机 Git 忽略的 ZIP 与 `.sha256` 文件，并在上传后重新核对哈希；只推送源码和标签不会包含发布包。
 3. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
 4. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
 5. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
@@ -76,7 +77,9 @@ Recruitment Radar: unchanged WxCliClient reported (0, 5, 1) and completed schema
 
 ## 0.5.0 开发更新（2026-08-30）
 
-0.5.0 的浏览器兜底可靠性功能已完成源码实现、离线验证和稳定目录安装，并快进合并到本地 `main`。本机 `current` 现为 0.5.0，`previous` 为已验收的 0.4.0；下面的 0.4.0 内容保留为历史验收记录和回滚依据。
+> 本节是 2026-08-30 的历史验收记录，不代表当前分支、安装版本或待办状态；当前状态以文档顶部“新项目接续摘要”为准。
+
+0.5.0 的浏览器兜底可靠性功能已完成源码实现、离线验证和稳定目录安装，并快进合并到当时的本地 `main`。当时本机 `current` 为 0.5.0，`previous` 为已验收的 0.4.0；下面的 0.4.0 内容保留为历史验收记录和回滚依据。
 
 本轮实现包括：
 
@@ -87,7 +90,7 @@ Recruitment Radar: unchanged WxCliClient reported (0, 5, 1) and completed schema
 - `browser login` 不再把“窗口正常结束”误报为登录有效；只有成功的真实 Chrome 文章回读才记录 `last_successful_read_at`。
 - 0.6.0 的图片下载、二维码和 OCR 仍只有批准设计，本轮没有实现。
 
-最新离线验证：
+当次离线验证：
 
 ```text
 pytest: 235 passed
@@ -97,7 +100,7 @@ coverage: repository 88%; browser_policy 98%; hydration 96%; Chrome Provider 91%
 
 已完成 0.5.0 的独立 PyInstaller onedir 构建和脚本内置离线冒烟，产物为 `dist\release\wxcli-0.5.0-windows-x64.zip`，SHA-256 为 `41bd019295566279bb9a5356c88945aa319ca098c4fb7940002c98fc5de0ef00`。原子安装、回滚到 0.4.0、重新安装以及双向回滚均已成功，最终 `current` 为 0.5.0，`previous` 为 0.4.0。用户级 Skill 的 7 个仓库管理文件与源码哈希一致，安装目录另有 `.wxcli-version` 版本标记文件。
 
-`wxcli --json browser policy status` 已实际返回 `never / configured:false / valid:true`；策略文件不存在，因此当前使用安全缺省值。招聘雷达也已通过 PATH 实际启动 0.5.0 完成空候选、零网络的 schema-v1 管道验收。招聘雷达当前完整 477 项测试通过，660 秒 wxcli 等待上限已经包含在提交 `9d65d03 feat(radar): enforce official announcement admission` 中。
+`wxcli --json browser policy status` 当时实际返回 `never / configured:false / valid:true`；策略文件不存在，因此使用安全缺省值。招聘雷达也已通过 PATH 实际启动 0.5.0 完成空候选、零网络的 schema-v1 管道验收。招聘雷达当时完整 477 项测试通过，660 秒 wxcli 等待上限已经包含在提交 `9d65d03 feat(radar): enforce official announcement admission` 中。
 
 2026-08-30 已在用户明确授权后完成安装版 0.5.0 的真实 Agent-first / Exa / 微信 / Chrome 验收：外部搜索产生 18 个严格 Public URL 候选，wxcli 接受 18 个、尝试回读 17 个并验证成功 17 个，`partial:false`；批次使用 CLI 单次 `auto-fallback`，一个 Browser Run 回读 17 个候选，`user_action_required:0`。另用未回读候选验证单篇路径：`--no-browser` 正确以退出码 6 返回 `VERIFICATION_REQUIRED`，随后 `--browser-fallback` 以退出码 0 成功提取非空正文和图片。验收结束后无 wxcli Chrome 进程残留，长期策略仍为 `never / configured:false / valid:true`。真实 URL、标题和正文未写入 Git。
 
@@ -107,13 +110,13 @@ coverage: repository 88%; browser_policy 98%; hydration 96%; Chrome Provider 91%
 
 > 快照日期：2026-08-29
 >
-> 当前版本：0.4.0
+> 快照版本：0.4.0
 >
-> 当前代码状态：0.4.0 已合并到本地 `main`，尚未打 tag、配置远程仓库或发布外部 Release
+> 快照代码状态：0.4.0 已合并到当时的本地 `main`，尚未打 tag、配置远程仓库或发布外部 Release
 
-## 1. 当前结论
+## 1. 0.4.0 快照结论
 
-wxcli 0.4.0 的开发、离线测试、Windows onedir 打包、稳定目录安装、回滚验证和真实 Agent-first 微信文章发现验收均已完成。本机当前服役版本是 0.4.0，保留 0.3.0 作为一键回滚版本。
+wxcli 0.4.0 的开发、离线测试、Windows onedir 打包、稳定目录安装、回滚验证和真实 Agent-first 微信文章发现验收均已完成。当时本机服役版本是 0.4.0，保留 0.3.0 作为一键回滚版本。
 
 0.4.0 已形成以下闭环：
 
@@ -129,10 +132,10 @@ Codex CLI
 
 wxcli 仍然是 Windows CLI。网页访问是 CLI 背后的 Provider 能力，不会把产品变成桌面 GUI，也不会改变 JSON 管道接口。
 
-## 2. Git、版本和安装状态
+## 2. Git、版本和安装状态快照
 
-- 当前分支：`main`
-- 当前提交：`2b9c53a fix: reject empty public article evidence`
+- 快照分支：`main`
+- 快照提交：`2b9c53a fix: reject empty public article evidence`
 - 原功能分支：`codex/safe-resumable-draft-updates`，目前与 `main` 指向同一提交
 - 工作区在生成本交接文件前是干净的
 - 项目版本：`pyproject.toml` 与 `src/wxcli/__init__.py` 均为 0.4.0
@@ -140,22 +143,22 @@ wxcli 仍然是 Windows CLI。网页访问是 CLI 背后的 Provider 能力，�
 - Git tag：尚未创建
 - 外部 push / PR / Release：均未执行
 
-本机稳定安装布局：
+当时的本机稳定安装布局：
 
 ```text
 %LOCALAPPDATA%\Programs\wxcli\
-  current\       # 当前 0.4.0，PATH 永远指向这里
+  current\       # 当时为 0.4.0，PATH 永远指向这里
   previous\      # 上一个 0.3.0，可回滚
   skills\<版本>\ # 对应版本的 wxcli Skill 快照
 ```
 
-当前命令解析到：
+当时命令解析到：
 
 ```text
 C:\Users\Mayn\AppData\Local\Programs\wxcli\current\wxcli.exe
 ```
 
-用户级 wxcli Skill 已同步为 0.4.0。
+用户级 wxcli Skill 当时已同步为 0.4.0。
 
 ## 3. 已实现能力
 
@@ -323,7 +326,7 @@ build\packaged-live-acceptance-0.4.0\agent-end-to-end-browser-fixed.json
 
 这些文件可能包含真实文章标题、URL 和正文证据，不应直接提交到 Git。
 
-## 7. 当前限制和未完成事项
+## 7. 0.4.0 限制和当时未完成事项
 
 ### 产品限制
 
@@ -333,7 +336,7 @@ build\packaged-live-acceptance-0.4.0\agent-end-to-end-browser-fixed.json
 - 不下载完整证据包，不继续访问外链，不处理官网或 ATS 内容。
 - 不进行企业、招聘公告、批次、岗位或申请渠道的业务分类。
 
-### 发布工作尚未完成
+### 快照时尚未完成的发布工作
 
 - 尚未配置 Git remote。
 - 尚未 push 本地 `main`。
@@ -345,7 +348,7 @@ build\packaged-live-acceptance-0.4.0\agent-end-to-end-browser-fixed.json
 
 `docs/release-windows.md` 中“首次使用文章发现时配置 Brave”的描述只适用于 Direct Discovery。Agent-first 使用 Exa 时不需要 Brave Key，后续文档整理时可进一步把这一点写得更醒目。
 
-## 8. 建议的下一步
+## 8. 当时建议的下一步
 
 1. 人工审阅本交接文件和本地 `main`。
 2. 确定远程仓库后配置 remote，并单独授权 push。
@@ -379,10 +382,11 @@ build\packaged-live-acceptance-0.4.0\agent-end-to-end-browser-fixed.json
 ```powershell
 git status -sb
 git log -1 --oneline
-wxcli --version
-wxcli --json doctor
+git show -s --oneline v0.5.1
+wechat-oa --version
+wechat-oa --json doctor
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，版本为 0.5.0，Doctor 默认不执行 live checks，测试 235 项通过，mypy 零问题。正式发布前还应确认 `v0.5.0` tag 指向当前发布提交，并完成上文单独授权的真实微信/Chrome live smoke。
+预期结果：分支为 `main`，`v0.5.1` 指向 `af04cb2`，版本为 0.5.1，Doctor 默认不执行 live checks，测试 237 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
