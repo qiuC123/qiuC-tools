@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, and article-level acquisition orchestration are implemented; analysis orchestration, derived-result caching, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, article-level acquisition orchestration, and packaged local standard-QR analyzer are implemented; analysis orchestration, derived-result caching, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -159,6 +159,14 @@ At most four images download concurrently and at most two local image analyses r
 ## QR Evidence
 
 Standard QR decoding runs through a packaged local analyzer against successfully decoded image bytes. Possible WeChat Mini Program codes may be identified as unsupported or unknown but are not promised to decode.
+
+The implemented analyzer uses the packaged `zxing-cpp` engine in QR-only mode. It rechecks the
+byte hash, byte count, decoded dimensions, and pixel boundary before analysis. Results are inert
+strings: URLs and contact payloads are classified for evidence only and are never opened or
+requested. C0/C1 terminal control characters are replaced before a payload enters evidence. More
+than 20 decoded symbols, a payload above 4 KiB, malformed input, or an engine error produces one
+bounded `failed` QR outcome without partial payloads. This analyzer is currently an internal
+primitive and does not make existing CLI commands download or analyze images.
 
 Each decoded payload is an inert string with its source image, payload hash, stable location ordering, and a conservative type such as URL, text, contact, or unknown. One image may produce at most 20 payloads and each payload is limited to 4 KB. Excess items or bytes receive explicit bounded-limit outcomes. wxcli never opens the payload, follows redirects, launches Chrome, invokes another application, executes commands, or promotes it to an External Link Handoff without an explicit future contract.
 
