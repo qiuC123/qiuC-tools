@@ -1,8 +1,25 @@
 # Media Evidence Design
 
-**Status: Approved design for wxcli 0.6.0, not implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data-model foundation is implemented; image download, cache, QR, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
+
+## Implemented model foundation
+
+The model contract lives in `src/wxcli/media/models.py`. It currently provides:
+
+- Media Evidence schema v1 and the explicit media-enabled outer result schema v2;
+- `MediaItemEvidence` with the stable `analyzed`, `skipped`, and `failed` statuses;
+- separate QR payload and local OCR outcomes linked to the exact image-byte SHA-256;
+- deterministic summary and `partial` values derived from item outcomes;
+- hard resource-limit models that callers may lower but cannot raise above approved caps;
+- a stable Media Evidence SHA-256 that includes result-affecting configuration and derived
+  observations while excluding run timestamps and cache-hit status; and
+- validation that Media Evidence links to the unchanged Article Evidence schema v1 through
+  `content_sha256`.
+
+This foundation is a data contract only. It does not add an `--analyze-media` control, download
+an image, inspect a live capability, decode a QR payload, run OCR, or create a Bundle.
 
 ## Goal and non-goals
 
