@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 import wxcli.cli as cli
@@ -176,13 +177,17 @@ def test_discovery_help_exposes_stable_commands() -> None:
     root = CliRunner().invoke(app, ["discovery", "--help"])
     search = CliRunner().invoke(app, ["discovery", "search", "--help"])
     hydrate = CliRunner().invoke(app, ["discovery", "hydrate", "--help"])
-    assert all(value in root.stdout for value in ("search", "hydrate", "auth", "cache"))
+    root_help = strip_ansi(root.stdout)
+    search_help = strip_ansi(search.stdout)
+    hydrate_help = strip_ansi(hydrate.stdout)
+
+    assert all(value in root_help for value in ("search", "hydrate", "auth", "cache"))
     assert all(
-        value in search.stdout
+        value in search_help
         for value in ("--input", "--checkpoint", "--hydrate", "--browser", "--browser-fallback", "--no-browser")
     )
     assert all(
-        value in hydrate.stdout
+        value in hydrate_help
         for value in ("--input", "--max-hydrate", "--browser", "--browser-fallback", "--no-browser")
     )
 

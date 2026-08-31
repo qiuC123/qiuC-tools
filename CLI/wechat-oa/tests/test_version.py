@@ -4,6 +4,7 @@ import json
 import sys
 
 import pytest
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from wxcli import __version__
@@ -19,10 +20,11 @@ def test_version_option_reports_package_version() -> None:
 
 def test_no_arguments_shows_help() -> None:
     result = CliRunner().invoke(app, [])
+    help_text = strip_ansi(result.stdout)
 
     assert result.exit_code == 0
-    assert "WeChat Official Account CLI" in result.stdout
-    assert "Usage: wechat-oa" in result.stdout
+    assert "WeChat Official Account CLI" in help_text
+    assert "Usage: wechat-oa" in help_text
 
 
 def test_json_version_is_a_single_json_document() -> None:
