@@ -1,4 +1,13 @@
-"""Versioned media-analysis evidence models."""
+"""Versioned media-analysis models and bounded download primitives."""
+
+from wxcli.media.downloader import (
+    APPROVED_MEDIA_HOSTS,
+    DownloadedMedia,
+    HostResolver,
+    MediaDownloader,
+    MediaDownloadFailure,
+    SystemHostResolver,
+)
 
 from wxcli.media.models import (
     MEDIA_EVIDENCE_EXTRACTOR_VERSION,
@@ -23,12 +32,17 @@ from wxcli.media.models import (
 )
 
 __all__ = [
+    "APPROVED_MEDIA_HOSTS",
+    "DownloadedMedia",
+    "HostResolver",
     "MEDIA_EVIDENCE_EXTRACTOR_VERSION",
     "MEDIA_EVIDENCE_SCHEMA_VERSION",
     "MEDIA_RESULT_SCHEMA_VERSION",
     "MediaAnalysisConfiguration",
     "MediaAnalysisLimits",
     "MediaAnalysisResult",
+    "MediaDownloader",
+    "MediaDownloadFailure",
     "MediaEvidence",
     "MediaFormat",
     "MediaItemEvidence",
@@ -41,5 +55,6 @@ __all__ = [
     "QRPayloadEvidence",
     "QRPayloadType",
     "QRStatus",
+    "SystemHostResolver",
     "build_media_evidence",
 ]
