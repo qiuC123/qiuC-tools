@@ -29,13 +29,13 @@
 - canonical 源码已迁入 `https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`；原 `qiuC123/wechat-oa` 暂时保留为迁移兼容仓库，不再作为后续开发目标。
 - 正式发布包通过 GitHub Release 分发；本地 `dist\` 仍被 Git 忽略，不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
-- 当前完整回归结果：238 项 pytest 通过；mypy 检查 36 个源文件无错误；两个 Skill 均通过规范校验。`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
+- 当前完整回归结果：249 项 pytest 通过；mypy 检查 38 个源文件无错误；两个 Skill 均通过规范校验。`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
 
 ### 下一步计划
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
+1. 0.6.0 的 Media Evidence 数据模型基础已经完成；下一步实现安全下载、大小与数量限制及缓存。随后接入本地二维码识别与 Windows OCR，最后实现可审计的 Evidence Bundle。
 2. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
 3. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
 
@@ -86,7 +86,7 @@ Recruitment Radar: unchanged WxCliClient reported (0, 5, 1) and completed schema
 - 一个批次最多创建一个 Chrome persistent context，每篇候选使用新标签页，结束后关闭；独立 profile 中的浏览器会话继续保留，但 wxcli 不导入、导出或显示 Cookie。
 - 浏览器锁最多等待五秒；浏览器挑战、崩溃、超时和 `BROWSER_BUSY` 都形成安全的结构化结果，不自动重启 Chrome，也不丢弃已完成的 Evidence。
 - `browser login` 不再把“窗口正常结束”误报为登录有效；只有成功的真实 Chrome 文章回读才记录 `last_successful_read_at`。
-- 0.6.0 的图片下载、二维码和 OCR 仍只有批准设计，本轮没有实现。
+- 0.6.0 的版本化 Media Evidence、Media Item、QR、OCR 和外层 schema-v2 数据模型已经实现；图片下载、缓存、二维码/OCR 分析器、CLI 接入和 Evidence Bundle 尚未实现。
 
 当次离线验证：
 
@@ -387,4 +387,4 @@ wechat-oa --json doctor
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks，当前 `main` 测试 238 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
+预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks，当前 `main` 测试 249 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
