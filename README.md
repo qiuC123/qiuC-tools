@@ -1,5 +1,7 @@
 # qiuC Tools
 
+[![WeChat OA CI](https://github.com/qiuC123/qiuC-tools/actions/workflows/wechat-oa-ci.yml/badge.svg)](https://github.com/qiuC123/qiuC-tools/actions/workflows/wechat-oa-ci.yml)
+
 `qiuC-tools` 是 qiuC 系列 CLI 的源码与发布仓库。每个工具拥有独立的版本、测试、
 构建脚本和许可证；供 Agent 使用的 Skill 仍由
 [`qiuC-skills`](https://github.com/qiuC123/qiuC-skills) 分发。
