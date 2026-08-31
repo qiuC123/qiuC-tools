@@ -1,5 +1,46 @@
 # 本地操作与诊断
 
+## 安装来源
+
+- canonical 源码：`https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`
+- 固定发布页：`https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.5.1`
+- Windows x64 ZIP：`https://github.com/qiuC123/qiuC-tools/releases/download/wechat-oa-v0.5.1/wechat-oa-0.5.1-windows-x64.zip`
+- SHA-256 文件：`https://github.com/qiuC123/qiuC-tools/releases/download/wechat-oa-v0.5.1/wechat-oa-0.5.1-windows-x64.zip.sha256`
+- 固定 SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`
+
+只有 Windows x64 支持该发布包。`wechat-oa` 与 `wxcli` 都不存在时，先向用户说明下载
+版本、来源、哈希和目标位置；只有取得明确授权后才能下载或解压。默认解压到新建的临时
+目录，使用绝对路径执行离线检查，不修改用户级 `PATH` 或持久安装目录：
+
+```powershell
+$releaseTemp = Join-Path ([System.IO.Path]::GetTempPath()) `
+  ("wechat-oa-0.5.1-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $releaseTemp | Out-Null
+$releaseZip = Join-Path $releaseTemp "wechat-oa-0.5.1-windows-x64.zip"
+$releaseHash = "$releaseZip.sha256"
+Invoke-WebRequest `
+  "https://github.com/qiuC123/qiuC-tools/releases/download/wechat-oa-v0.5.1/wechat-oa-0.5.1-windows-x64.zip" `
+  -OutFile $releaseZip
+Invoke-WebRequest `
+  "https://github.com/qiuC123/qiuC-tools/releases/download/wechat-oa-v0.5.1/wechat-oa-0.5.1-windows-x64.zip.sha256" `
+  -OutFile $releaseHash
+$actualHash = (Get-FileHash $releaseZip -Algorithm SHA256).Hash.ToLowerInvariant()
+$publishedHash = ((Get-Content $releaseHash -Raw).Trim() -split "\s+")[0].ToLowerInvariant()
+$pinnedHash = "bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a"
+if ($actualHash -ne $publishedHash -or $actualHash -ne $pinnedHash) {
+    throw "WeChat OA release checksum mismatch"
+}
+Expand-Archive -LiteralPath $releaseZip -DestinationPath $releaseTemp
+$releaseExe = Join-Path $releaseTemp `
+  "wechat-oa-0.5.1-windows-x64\wechat-oa.exe"
+& $releaseExe --version
+& $releaseExe --json doctor
+```
+
+必须同时看到版本 `0.5.1`、进程退出码 `0` 和 Doctor JSON 的 `ok: true` 才算临时
+安装可用。真实网络、官方接口和 Chrome 不属于安装验收。持久安装、用户级 `PATH` 修改、
+升级或回滚必须由用户另行明确请求，并遵循源码目录中的 `docs/release-windows.md`。
+
 ## Doctor
 
 默认 Doctor 不执行真实网络或账号检查：

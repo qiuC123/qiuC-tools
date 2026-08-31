@@ -23,6 +23,11 @@ dependencies = [
     "Pillow>=10.4,<12.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa"
+Repository = "https://github.com/qiuC123/qiuC-tools"
+Issues = "https://github.com/qiuC123/qiuC-tools/issues"
+
 [project.optional-dependencies]
 dev = [
     "mypy>=1.10,<2.0",

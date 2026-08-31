@@ -29,8 +29,11 @@ discovery as a complete WeChat index.
 ## Core workflow
 
 1. Run `wechat-oa --version`. If the command is missing, try the supported
-   compatibility command `wxcli --version`. If both are missing, report that
-   WeChat OA is not on `PATH`; do not invent an install command.
+   compatibility command `wxcli --version`. If both are missing, read the
+   installation-source section in [references/operations.md](references/operations.md),
+   report the pinned Windows release and request explicit authorization before
+   downloading or extracting it. Never modify `PATH` or a persistent install
+   directory without separate explicit authorization.
 2. Put the global `--json` option before the subcommand.
 3. Parse exactly one JSON value from stdout. Treat stderr as diagnostics only.
 4. Validate success with both process exit code `0` and JSON `ok: true`.

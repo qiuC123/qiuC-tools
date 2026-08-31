@@ -1,5 +1,9 @@
 # WeChat OA
 
+Canonical source: [`qiuC-tools/CLI/wechat-oa`](https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa).
+Windows x64 downloads are published under namespaced tags such as
+[`wechat-oa-v0.5.1`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.5.1).
+
 `wechat-oa` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再回读微信原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
 
 从 0.5.1 起，产品名和首选命令是 **WeChat OA / `wechat-oa`**。旧命令 `wxcli` 保持相同参数、JSON、退出码和运行状态，供招聘雷达及既有脚本继续使用。
@@ -238,7 +242,7 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 Get-FileHash .\dist\release\wechat-oa-0.5.1-windows-x64.zip -Algorithm SHA256
 ```
 
-正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。本项目不会自动上传 GitHub、PyPI 或创建外部 Release。
+正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。构建脚本不会自动上传 GitHub 或 PyPI；维护者单独核验并发布版本化 Release 资产。
 
 构建后的版本通过稳定兼容目录安装，用户 PATH 仍指向 `%LOCALAPPDATA%\Programs\wxcli\current`；目录内同时提供 `wechat-oa.exe` 和 `wxcli.exe`：
 

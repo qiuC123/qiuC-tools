@@ -4,8 +4,8 @@
 
 ### 当前工作位置
 
-- 源码已经从 `E:\devlop\WxCLi` 迁移到 `E:\devlop\Wechat-develop\wechat-oa`。
-- 新目录中的 Git 仓库完整，虚拟环境已经重新绑定并验证可用。
+- canonical 源码现位于 monorepo 的 `E:\devlop\qiuC-tools\CLI\wechat-oa`。
+- 原独立仓库工作区 `E:\devlop\Wechat-develop\wechat-oa` 暂时保留用于迁移兼容和既有发布构建，不再作为后续开发目标。
 - 旧目录 `E:\devlop\WxCLi` 已经清空，但当时被原 Codex 任务占用，尚未创建目录联接。关闭旧任务后需明确二选一：不再兼容旧对话就删除该空目录；仍需兼容旧工作目录就先删除空目录，再创建指向新目录的目录联接。
 - 旧对话记录的工作目录仍是旧路径，不能自动改写。后续开发应在 Codex 的 `wechat-oa` 新项目中创建新任务，并先阅读本文件。
 
@@ -23,11 +23,11 @@
 
 - 当前分支：`main`；`codex/wechat-oa-rename` 已快进合并，0.5.1 是后续开发唯一基线。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
-- `v0.5.1` 指向上述验收提交；本交接文档位于其后的文档提交中，因此接手时应以 `git log -1 --oneline` 获取实际 HEAD，不要把验收提交误认为分支顶端。
-- 本地标签：`v0.5.1`。
+- 原独立仓库的 `v0.5.1` 指向上述验收提交；monorepo 使用带工具名的发布标签，避免未来多个 CLI 的版本标签冲突。
+- monorepo 发布标签：`wechat-oa-v0.5.1`。该标签指向迁移和发布元数据提交；运行时代码仍对应已经验收的 0.5.1 基线。
 - 本地 `main` 已包含 0.5.1 命名更新、验收记录和本交接文档修正。
-- 当前源码仓库已配置 `origin` 为 `https://github.com/qiuC123/wechat-oa.git`，本地 `main` 与 `v0.5.1` 已推送。
-- 本机正式发布包：`dist\release\wechat-oa-0.5.1-windows-x64.zip`。`dist\` 被 Git 忽略，该文件不会随源码 push 或 clone 自动传输。
+- canonical 源码已迁入 `https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`；原 `qiuC123/wechat-oa` 暂时保留为迁移兼容仓库，不再作为后续开发目标。
+- 正式发布包通过 GitHub Release 分发；本地 `dist\` 仍被 Git 忽略，不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
 - 当前完整回归结果：238 项 pytest 通过；mypy 检查 36 个源文件无错误；两个 Skill 均通过规范校验。`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
 
@@ -35,10 +35,9 @@
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 如果要对外分发 0.5.1，单独创建 GitHub Release，上传本机 Git 忽略的 ZIP 与 `.sha256` 文件，并在上传后重新核对哈希；只推送源码和标签不会包含发布包。
-2. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
-3. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
-4. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
+1. 从 0.5.1 开始 0.6.0：实现公众号图片证据能力。第一优先级是安全下载、大小与数量限制、缓存和失败模型；第二优先级是本地二维码识别与 Windows OCR；最后实现可审计的 Media Evidence / Evidence Bundle。
+2. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
+3. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
 
 ### 必须保持的边界
 
@@ -381,11 +380,11 @@ build\packaged-live-acceptance-0.4.0\agent-end-to-end-browser-fixed.json
 ```powershell
 git status -sb
 git log -1 --oneline
-git show -s --oneline v0.5.1
+git show -s --oneline wechat-oa-v0.5.1
 wechat-oa --version
 wechat-oa --json doctor
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，`v0.5.1` 指向 `af04cb2`，版本为 0.5.1，Doctor 默认不执行 live checks，当前 `main` 测试 238 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
+预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks，当前 `main` 测试 238 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
