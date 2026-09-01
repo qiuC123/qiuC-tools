@@ -24,6 +24,22 @@ wechat-oa --json article get "URL" --no-cache
 `--no-cache` 同时禁止读写缓存。缓存只保存公共 URL 的成功结果，默认 TTL
 为一小时；失败和验证页不会缓存。
 
+## 显式图片分析
+
+只有用户明确要求下载、识别文章图片、二维码或 OCR 时，才加入：
+
+```powershell
+wechat-oa --json article get "URL" --analyze-media
+wechat-oa --json article evidence "URL" --analyze-media
+```
+
+启用后返回外层 schema v2，其中分别保留 Article Evidence schema v1 和 Media
+Evidence schema v1。不加开关时输出结构不变，也不读取图片缓存或运行分析器。
+媒体模式下同时使用 `--no-cache` 会禁止文章和图片缓存的读写。
+
+二维码结果只作为惰性文本证据，绝不打开目标。OCR 只使用本地 Windows 能力，
+不上传图片、不切换到云 OCR；`unavailable`、单图失败和部分结果必须原样报告。
+
 ## 验证页
 
 `VERIFICATION_REQUIRED` 表示微信返回了验证页，不表示文章不存在，也不表示

@@ -69,6 +69,10 @@ wechat-oa article get "https://mp.weixin.qq.com/s/example" --no-cache
 # 对一篇真实微信原文生成身份、外链和稳定哈希证据
 wechat-oa --json article evidence "https://mp.weixin.qq.com/s/example"
 
+# 只有明确加入开关才安全下载文章图片并运行本地二维码/Windows OCR
+wechat-oa --json article get "https://mp.weixin.qq.com/s/example" --analyze-media
+wechat-oa --json article evidence "https://mp.weixin.qq.com/s/example" --analyze-media
+
 # 首次使用发现功能时，交互式把 Brave API Key 存入 Windows 凭据管理器
 wechat-oa discovery auth configure --provider brave
 wechat-oa --json discovery auth status --provider brave
@@ -157,7 +161,7 @@ wechat-oa doctor --allow-live-api
 - 默认最多返回 50 个候选。启用回读后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
 - `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
 - `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
-- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。0.6.0 的 Media Evidence 数据模型、安全图片下载器、原始字节缓存、文章级限额编排、本地标准二维码分析器、可替换的 Windows 本地 OCR Provider，以及按图片字节 SHA-256 去重并保持每个文章图片位置的分析编排已经实现；它们尚未接入 CLI，派生结果缓存和 Evidence Bundle 也未实现，因此 0.5.1 命令仍不提供完整媒体分析能力。
+- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。开发版 0.6.0 已实现 Media Evidence、安全图片下载与缓存、本地标准二维码、可替换 Windows OCR、SHA-256 去重编排，以及单篇 `article get/evidence --analyze-media` 显式控制；默认命令输出完全不变。发现批次媒体控制、派生结果缓存、能力 Doctor 和 Evidence Bundle 仍未实现。正式发布的 0.5.1 尚不包含这些媒体分析能力。
 - 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
 
 完整 schema、部分成功语义和验收口径见 [文章发现说明](docs/article-discovery.md)。

@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, article-level acquisition orchestration, packaged local standard-QR analyzer, replaceable Windows local-OCR provider, and bounded QR/OCR analysis orchestration are implemented; derived-result caching, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, and explicit single-Article CLI activation are implemented; Discovery media activation, capability Doctor, derived-result caching, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -53,8 +53,10 @@ Every admitted occurrence counts toward the Article byte budget, including a rep
 from cache, so downstream decode and analysis memory remains bounded; the cache still avoids the
 second network request.
 
-The acquisition layer remains an internal primitive and is not yet connected to Article Evidence
-or a CLI control. Therefore the existing 0.5.1 commands still perform no media downloads.
+The acquisition layer is connected to Article Evidence only through the explicit single-Article
+`--analyze-media` controls. Without that flag, the existing commands do not construct a media
+cache, downloader, or analyzer and retain their previous output structure. `--no-cache` on an
+enabled `article get` invocation disables both Article Cache and Media Cache reads and writes.
 
 Article-level analysis lives in `src/wxcli/media/analysis.py`. It consumes only bounded acquisition
 results, rechecks byte length, SHA-256, media type, dimensions, and pixel count before invoking a
@@ -86,6 +88,14 @@ Media Analysis is off by default and starts only after Article Evidence exists. 
 
 ```powershell
 wxcli --json article evidence "WECHAT_URL" --analyze-media
+wxcli --json article get "WECHAT_URL" --analyze-media
+```
+
+Both single-Article controls are implemented. Discovery `--analyze-media`, schema-v2 Direct
+Discovery Requests, and the read-only capability command below remain planned controls rather
+than current CLI behavior:
+
+```powershell
 wxcli --json discovery search "校园招聘" --hydrate --analyze-media
 wxcli --json discovery hydrate --input candidates.json --analyze-media
 ```
@@ -120,7 +130,7 @@ Media controls do not grant Chrome access. Browser authorization is still resolv
 
 Article Evidence schema v1, `content_sha256`, and `evidence_sha256` keep their 0.4.0 meanings. Media Analysis produces a separate Media Evidence schema v1 linked by the exact source `content_sha256`.
 
-Commands that do not enable Media Analysis retain their existing outer schema-v1 result exactly. A media-enabled command returns outer result schema v2 containing the unchanged Article Evidence schema v1 and the separate Media Evidence schema v1. This makes the new contract explicit while leaving old requests and consumers untouched.
+Commands that do not enable Media Analysis retain their existing result structure exactly. A media-enabled command returns outer result schema v2 containing the unchanged Article Evidence schema v1 and the separate Media Evidence schema v1. This makes the new contract explicit while leaving old requests and consumers untouched.
 
 The Media Evidence document records:
 
