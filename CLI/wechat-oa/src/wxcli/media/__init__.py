@@ -1,5 +1,12 @@
 """Versioned media-analysis models and bounded download primitives."""
 
+from wxcli.media.analysis import (
+    ANALYSIS_GUARD,
+    ANALYSIS_GUARD_VERSION,
+    ArticleMediaAnalyzer,
+    QRAnalyzer,
+)
+
 from wxcli.media.cache import (
     MAX_MEDIA_CACHE_BYTES,
     MEDIA_CACHE_SCHEMA_VERSION,
@@ -65,8 +72,11 @@ from wxcli.media.qr import (
 )
 
 __all__ = [
+    "ANALYSIS_GUARD",
+    "ANALYSIS_GUARD_VERSION",
     "APPROVED_MEDIA_HOSTS",
     "ArticleMediaDownloader",
+    "ArticleMediaAnalyzer",
     "ArticleMediaDownloads",
     "BoundedMediaDownloader",
     "CachedMedia",
@@ -104,6 +114,7 @@ __all__ = [
     "QRPayloadEvidence",
     "QRPayloadType",
     "QRStatus",
+    "QRAnalyzer",
     "STANDARD_QR_ANALYZER",
     "STANDARD_QR_ANALYZER_VERSION",
     "StandardQRAnalyzer",
