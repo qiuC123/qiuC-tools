@@ -47,6 +47,7 @@ from wxcli.media import (
     MediaAnalysisConfiguration,
     MediaAnalysisResult,
     MediaCache,
+    MediaDoctor,
     MediaDownloader,
 )
 from wxcli.official_check import OfficialReadOnlyChecker
@@ -127,6 +128,11 @@ def default_media_cache() -> MediaCache:
 def default_media_analysis_configuration() -> MediaAnalysisConfiguration:
     """Return invocation-owned defaults recorded in every Media Evidence result."""
     return MediaAnalysisConfiguration()
+
+
+def default_media_doctor() -> MediaDoctor:
+    """Return the credential-free local media capability probe."""
+    return MediaDoctor()
 
 
 def default_discovery_secrets() -> DiscoverySecretStore:
@@ -561,6 +567,16 @@ def clear_cache(context: typer.Context) -> None:
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
     output.success({"cleared": default_cache().clear()})
+
+
+@media_app.command("doctor")
+def media_doctor(context: typer.Context) -> None:
+    """Check packaged image/QR support and optional local Windows OCR."""
+    output = _output(context)
+    report = default_media_doctor().run()
+    output.success(report)
+    if report.overall == "fail":
+        raise typer.Exit(ExitCode.GENERAL)
 
 
 @media_cache_app.command("clear")
