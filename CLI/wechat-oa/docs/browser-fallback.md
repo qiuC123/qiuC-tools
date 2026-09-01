@@ -105,6 +105,18 @@ cache
 
 Existing `--browser` continues to select Chrome directly so 0.4.0 scripts that intentionally require `provider: chrome` are not silently changed.
 
+After a visible Chrome page has been classified as an Article, the provider performs a bounded,
+read-only scan of `#js_content` before taking the final snapshot. It scrolls only the current page,
+stops after at most 7 seconds, 80 steps, 2,000 observed elements, or 200 image URLs, and never clicks
+or navigates an Article link. The scan observes lazy/runtime image sources, `picture`/`source`, SVG
+`image`, video posters, and CSS background images. Only HTTPS runtime observations without embedded
+credentials are accepted. A failed optional scan falls back to the already readable static Article
+instead of discarding its core evidence.
+
+Static HTTP and Chrome snapshots also extract those supported markup forms when they are already
+present in `#js_content`. Runtime observations are merged in source order and deduplicated before
+they become `Article.images`; this discovery step does not download or analyze an image.
+
 ## Batch flow
 
 Hydration first runs its bounded parallel HTTP phase for every selected candidate. It then collects only candidates whose HTTP result is Verification Required.

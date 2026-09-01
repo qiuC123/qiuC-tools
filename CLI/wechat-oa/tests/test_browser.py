@@ -23,6 +23,7 @@ class FakePage:
     def goto(self, *_: object, **__: object) -> None: pass
     def content(self) -> str:
         return '<h1 id="activity-name">Chrome</h1><div id="js_content">正文</div>'
+    def evaluate(self, _: str, __: object) -> list[str]: return []
     def wait_for_timeout(self, _: int) -> None: pass
     def close(self) -> None: pass
 
@@ -94,6 +95,117 @@ def test_mocked_chrome_provider_uses_chrome_model(tmp_path: Path) -> None:
     article = provider.get("https://mp.weixin.qq.com/s/token")
     assert article.title == "Chrome"
     assert article.provider is Provider.CHROME
+
+
+def test_chrome_discovers_runtime_media_after_bounded_article_scan(tmp_path: Path) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+    page = FakePage()
+    calls: list[object] = []
+
+    def content() -> str:
+        return """
+        <h1 id="activity-name">Poster</h1>
+        <div id="js_content">
+          <img data-src="https://mmbiz.qpic.cn/static.jpg">
+          <picture><source srcset="https://mmbiz.qpic.cn/picture.webp 2x"></picture>
+          <svg><image href="https://mmbiz.qpic.cn/vector.png"></image></svg>
+          <video poster="https://mmbiz.qpic.cn/poster.jpg"></video>
+          <div style="background-image:url('https://mmbiz.qpic.cn/background.jpg')"></div>
+        </div>
+        """
+
+    def evaluate(_: str, options: object) -> list[str]:
+        calls.append(options)
+        return [
+            "https://mmbiz.qpic.cn/static.jpg",
+            "https://mmbiz.qpic.cn/lazy.jpg",
+            "https://mmbiz.qpic.cn/background.jpg",
+        ]
+
+    page.content = content  # type: ignore[method-assign]
+    page.evaluate = evaluate  # type: ignore[method-assign]
+
+    class MediaContext(FakeContext):
+        def new_page(self) -> FakePage: return page
+
+    class MediaChromium:
+        def launch_persistent_context(self, **_: object) -> MediaContext: return MediaContext()
+
+    class MediaPlaywright(FakePlaywright):
+        chromium = MediaChromium()
+
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=MediaPlaywright,
+        chrome_path=chrome,
+    )
+
+    article = provider.get("https://mp.weixin.qq.com/s/token")
+
+    assert article.images == [
+        "https://mmbiz.qpic.cn/static.jpg",
+        "https://mmbiz.qpic.cn/lazy.jpg",
+        "https://mmbiz.qpic.cn/background.jpg",
+        "https://mmbiz.qpic.cn/picture.webp",
+        "https://mmbiz.qpic.cn/vector.png",
+        "https://mmbiz.qpic.cn/poster.jpg",
+    ]
+    assert calls == [
+        {
+            "maxSteps": 80,
+            "pauseMs": 75,
+            "stableRounds": 3,
+            "maxElements": 2000,
+            "maxImages": 200,
+        }
+    ]
+
+
+def test_chrome_keeps_static_article_when_optional_media_scan_fails(tmp_path: Path) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+    page = FakePage()
+    closed = False
+
+    def content() -> str:
+        return """
+        <h1 id="activity-name">Static article</h1>
+        <div id="js_content"><img data-src="https://mmbiz.qpic.cn/static.jpg"></div>
+        """
+
+    def evaluate(_: str, __: object) -> list[str]:
+        raise PlaywrightError("optional scan failed")
+
+    def close() -> None:
+        nonlocal closed
+        closed = True
+
+    page.content = content  # type: ignore[method-assign]
+    page.evaluate = evaluate  # type: ignore[method-assign]
+    page.close = close  # type: ignore[method-assign]
+
+    class ScanFailureContext(FakeContext):
+        def new_page(self) -> FakePage: return page
+
+    class ScanFailureChromium:
+        def launch_persistent_context(self, **_: object) -> ScanFailureContext:
+            return ScanFailureContext()
+
+    class ScanFailurePlaywright(FakePlaywright):
+        chromium = ScanFailureChromium()
+
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=ScanFailurePlaywright,
+        chrome_path=chrome,
+    )
+
+    article = provider.get("https://mp.weixin.qq.com/s/token")
+
+    assert article.title == "Static article"
+    assert article.images == ["https://mmbiz.qpic.cn/static.jpg"]
+    assert closed is True
 
 
 def test_chrome_success_is_shared_with_http_cache(tmp_path: Path) -> None:
@@ -231,6 +343,8 @@ def test_chrome_run_classifies_non_article_pages(
 
     class HtmlPage(FakePage):
         def content(self) -> str: return html
+        def evaluate(self, _: str, __: object) -> list[str]:
+            pytest.fail("non-article pages must not run the media scan")
 
     class HtmlContext(FakeContext):
         def new_page(self) -> HtmlPage: return HtmlPage()
@@ -272,14 +386,20 @@ def test_chrome_run_deadline_and_playwright_failure_are_structured(tmp_path: Pat
     assert deadline.value.code is ErrorCode.CHROME_ERROR
 
     class BrokenPage(FakePage):
+        closed = False
         def goto(self, *_: object, **__: object) -> None:
             raise PlaywrightError("page crashed")
+        def close(self) -> None:
+            self.closed = True
 
     class BrokenContext(FakeContext):
-        def new_page(self) -> BrokenPage: return BrokenPage()
+        page = BrokenPage()
+        def new_page(self) -> BrokenPage: return self.page
+
+    broken_context = BrokenContext()
 
     class BrokenChromium:
-        def launch_persistent_context(self, **_: object) -> BrokenContext: return BrokenContext()
+        def launch_persistent_context(self, **_: object) -> BrokenContext: return broken_context
 
     class BrokenPlaywright(FakePlaywright):
         chromium = BrokenChromium()
@@ -292,6 +412,7 @@ def test_chrome_run_deadline_and_playwright_failure_are_structured(tmp_path: Pat
     with pytest.raises(WxcliError) as failed:
         broken.get_document("https://mp.weixin.qq.com/s/T1")
     assert failed.value.code is ErrorCode.CHROME_ERROR
+    assert broken_context.page.closed is True
 
 
 def test_missing_chrome_is_a_structured_error(tmp_path: Path) -> None:
