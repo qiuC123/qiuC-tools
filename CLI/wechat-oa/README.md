@@ -4,7 +4,7 @@ Canonical source: [`qiuC-tools/CLI/wechat-oa`](https://github.com/qiuC123/qiuC-t
 Windows x64 downloads are published under namespaced tags such as
 [`wechat-oa-v0.5.1`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.5.1).
 
-`wechat-oa` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再回读微信原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
+`wechat-oa` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再读取公众号原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
 
 从 0.5.1 起，产品名和首选命令是 **WeChat OA / `wechat-oa`**。旧命令 `wxcli` 保持相同参数、JSON、退出码和运行状态，供招聘雷达及既有脚本继续使用。
 
@@ -80,17 +80,21 @@ wechat-oa --json discovery auth status --provider brave
 # 只发现候选，不访问候选微信页面
 wechat-oa --json discovery search "2027 校园招聘" --company "示例公司" --account "示例招聘"
 
-# 显式回读分级选中的候选；一次性回退只在 HTTP 验证页后打开 Chrome
+# 显式读取分级选中的公众号原文；一次性回退只在 HTTP 验证页后打开 Chrome
 wechat-oa --json discovery search "2027 校园招聘" --hydrate
 wechat-oa --json discovery search "2027 校园招聘" --hydrate --browser-fallback
+
+# 只有显式加入开关，才对已成功读取的候选文章做批量图片/二维码/OCR 分析
+wechat-oa --json discovery search "2027 校园招聘" --hydrate --analyze-media
 
 # 版本化 JSON 可来自文件或标准输入；二者都不能携带 API Key
 wechat-oa --json discovery search --input .\request.json
 Get-Content .\request.json | wechat-oa --json discovery search --input -
 
-# Agent Reach/Exa 只负责生成候选；wechat-oa 校验、去重并回读微信原文
+# Agent Reach/Exa 只负责生成候选；wechat-oa 校验、去重并读取公众号原文
 wechat-oa --json discovery hydrate --input .\candidates.json
 Get-Content .\candidates.json | wechat-oa --json discovery hydrate --input -
+wechat-oa --json discovery hydrate --input .\candidates.json --analyze-media
 
 # 只清理发现缓存、候选历史和 checkpoint 状态
 wechat-oa --json discovery cache clear
@@ -161,10 +165,10 @@ wechat-oa doctor --allow-live-api
 - Candidate Batch 不能授权浏览器。默认长期策略为 `never`；用户可以本地追加 `--browser-fallback`、使用可信 Direct Discovery Request 的本次授权，或明确设置长期 `auto-fallback`。`--no-browser` 对本次调用拥有最高优先级。
 - `discovery search` 使用 Brave Web Search，并强制加入 `site:mp.weixin.qq.com/s`。它是“微信公众号文章发现”，不是微信官方搜索，也不承诺全微信、全量或实时无延迟。
 - 搜索命中始终只是 Candidate。只有 `--hydrate` 成功读取真实微信原文后才会产生 Article Evidence；失败会保留为安全的 `hydration_attempt`，不会用搜索摘要伪造正文。
-- 默认最多返回 50 个候选。启用回读后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
+- 默认最多返回 50 个候选。启用原文读取后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
 - `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
 - `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
-- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。开发版 0.6.0 已实现 Media Evidence、安全图片下载与缓存、本地标准二维码、可替换 Windows OCR、SHA-256 去重编排、单篇 `article get/evidence --analyze-media` 显式控制和纯本地 `media doctor`；默认文章命令输出完全不变。发现批次媒体控制、派生结果缓存和 Evidence Bundle 仍未实现。正式发布的 0.5.1 尚不包含这些媒体分析能力。
+- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。开发版 0.6.0 已实现 Media Evidence、安全图片下载与缓存、本地标准二维码、可替换 Windows OCR、SHA-256 去重编排、单篇文章与发现批次的显式 `--analyze-media` 控制，以及纯本地 `media doctor`；不开启媒体分析时原输出完全不变。发现批次启用后返回外层 schema v2，内嵌原 discovery schema v1，并用 `candidate_index`、`article_identity` 和正文哈希关联媒体证据。派生结果缓存和 Evidence Bundle 仍未实现。正式发布的 0.5.1 尚不包含这些媒体分析能力。
 - 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
 
 完整 schema、部分成功语义和验收口径见 [文章发现说明](docs/article-discovery.md)。

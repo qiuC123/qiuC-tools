@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article CLI activation, and offline Media Doctor are implemented; Discovery media activation, derived-result caching, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article and Discovery CLI activation, and offline Media Doctor are implemented; schema-v2 Direct Discovery Request input, derived-result caching, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -87,23 +87,23 @@ It does not search for extra images, visit Article external links, open QR desti
 Media Analysis is off by default and starts only after Article Evidence exists. The approved local controls are:
 
 ```powershell
-wxcli --json article evidence "WECHAT_URL" --analyze-media
-wxcli --json article get "WECHAT_URL" --analyze-media
+wechat-oa --json article evidence "WECHAT_URL" --analyze-media
+wechat-oa --json article get "WECHAT_URL" --analyze-media
 ```
 
-Both single-Article controls and the read-only capability command below are implemented. Discovery
-`--analyze-media` and schema-v2 Direct Discovery Requests remain planned controls rather than
-current CLI behavior:
+Both single-Article controls, both Discovery CLI controls, and the read-only capability command
+below are implemented. Schema-v2 Direct Discovery Request JSON remains planned rather than current
+input behavior:
 
 ```powershell
-wxcli --json discovery search "校园招聘" --hydrate --analyze-media
-wxcli --json discovery hydrate --input candidates.json --analyze-media
+wechat-oa --json discovery search "校园招聘" --hydrate --analyze-media
+wechat-oa --json discovery hydrate --input candidates.json --analyze-media
 ```
 
 Local capability inspection is read-only:
 
 ```powershell
-wxcli --json media doctor
+wechat-oa --json media doctor
 ```
 
 It runs an in-memory standard-QR round trip, reports JPEG/PNG/WebP/GIF decoder availability, and
@@ -136,7 +136,7 @@ Media controls do not grant Chrome access. Browser authorization is still resolv
 
 Article Evidence schema v1, `content_sha256`, and `evidence_sha256` keep their 0.4.0 meanings. Media Analysis produces a separate Media Evidence schema v1 linked by the exact source `content_sha256`.
 
-Commands that do not enable Media Analysis retain their existing result structure exactly. A media-enabled command returns outer result schema v2 containing the unchanged Article Evidence schema v1 and the separate Media Evidence schema v1. This makes the new contract explicit while leaving old requests and consumers untouched.
+Commands that do not enable Media Analysis retain their existing result structure exactly. A media-enabled single-Article command returns outer result schema v2 containing the unchanged Article Evidence schema v1 and separate Media Evidence schema v1. A media-enabled Discovery command returns a Discovery-specific outer schema v2 containing the complete unchanged Discovery or Candidate Ingestion schema-v1 result plus ordered Media Evidence links. Each link records `candidate_index`, `article_identity`, and the exact source `content_sha256`. This makes the new contract explicit while leaving old requests and consumers untouched.
 
 The Media Evidence document records:
 

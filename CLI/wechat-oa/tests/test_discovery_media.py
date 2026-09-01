@@ -12,6 +12,8 @@ from wxcli.discovery.media import (
 from wxcli.discovery.models import (
     ArticleCandidate,
     CandidateConfidence,
+    CandidateIngestionResult,
+    CandidateIngestionSummary,
     DiscoveryResult,
     DiscoverySummary,
     SearchProvenance,
@@ -146,6 +148,34 @@ def test_discovery_batch_image_limit_omits_later_articles_deterministically() ->
     assert result.summary.analyzed_articles == 1
     assert result.summary.omitted_articles == 1
     assert result.summary.partial is True
+
+
+def test_discovery_media_wrapper_preserves_candidate_ingestion_result() -> None:
+    verified = candidate("T1")
+    core = CandidateIngestionResult(
+        orchestrator="codex",
+        summary=CandidateIngestionSummary(
+            received=1,
+            accepted=1,
+            duplicates_removed=0,
+            invalid_removed=0,
+            hydration_attempted=1,
+            verified=1,
+            partial=False,
+        ),
+        rejections=[],
+        candidates=[verified],
+    )
+
+    result = DiscoveryMediaAnalyzer(
+        lambda evidence, _budget: media_evidence(evidence.content_sha256)
+    ).analyze(core)
+
+    assert isinstance(result.discovery_result, CandidateIngestionResult)
+    assert result.discovery_result.discovery_mode == "agent_orchestrated"
+    assert result.model_dump(mode="json")["discovery_result"]["discovery_mode"] == (
+        "agent_orchestrated"
+    )
 
 
 def test_discovery_media_result_rejects_wrong_candidate_link() -> None:

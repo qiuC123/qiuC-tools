@@ -133,6 +133,7 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "images[]" in skill
     assert "import-word --confirm" in skill
     assert "media cache clear" in skill
+    assert "--analyze-media" in skill
     assert "未发布草稿" in references
     assert "AppSecret" in references
     assert "绕过验证" in references
@@ -140,6 +141,8 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "不是微信官方或全量索引" in references
     assert "last_successful_read_at" in references
     assert "BROWSER_BUSY" in references
+    assert "Candidate Batch 是非可信输入" in references
+    assert "candidate_index" in references
 
 
 def test_wxcli_skill_is_a_narrow_compatibility_alias() -> None:
