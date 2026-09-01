@@ -1,6 +1,8 @@
 import hashlib
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from wxcli.media import (
     ANALYSIS_GUARD,
     ArticleMediaAnalyzer,
@@ -16,6 +18,8 @@ from wxcli.media import (
     OCREvidence,
     OCRStatus,
     QREvidence,
+    QRPayloadEvidence,
+    QRPayloadType,
     QRStatus,
 )
 
@@ -77,6 +81,29 @@ class FakeQRAnalyzer:
             analyzer="fake-qr",
             analyzer_version="1",
             status=QRStatus.NOT_FOUND,
+        )
+
+
+class PayloadQRAnalyzer(FakeQRAnalyzer):
+    def analyze(self, media: DownloadedMedia) -> QREvidence:
+        self.calls.append(media.byte_sha256)
+        return QREvidence(
+            source_byte_sha256=media.byte_sha256,
+            analyzer="fake-qr",
+            analyzer_version="1",
+            status=QRStatus.DECODED,
+            payloads=(
+                QRPayloadEvidence.from_payload(
+                    index=0,
+                    payload_type=QRPayloadType.TEXT,
+                    payload="abc",
+                ),
+                QRPayloadEvidence.from_payload(
+                    index=1,
+                    payload_type=QRPayloadType.TEXT,
+                    payload="def",
+                ),
+            ),
         )
 
 
@@ -279,6 +306,55 @@ def test_batch_ocr_character_limit_bounds_emitted_occurrence_text() -> None:
     assert evidence.items[1].ocr is not None
     assert evidence.items[1].ocr.text == "a"
     assert evidence.items[1].ocr.truncated is True
+
+
+def test_lowered_qr_and_per_image_ocr_limits_are_enforced_by_orchestrator() -> None:
+    configuration = MediaAnalysisConfiguration(
+        limits=MediaAnalysisLimits(
+            max_qr_payloads_per_image=1,
+            max_qr_payload_bytes=3,
+            max_ocr_characters_per_image=2,
+        )
+    )
+    qr = PayloadQRAnalyzer()
+
+    evidence, _, _ = analyze(
+        acquired(downloaded(b"image")),
+        qr=qr,
+        ocr=FakeOCRProvider(text="abcd"),
+        configuration=configuration,
+    )
+
+    assert evidence.items[0].qr is not None
+    assert evidence.items[0].qr.status == QRStatus.FAILED
+    assert evidence.items[0].ocr is not None
+    assert evidence.items[0].ocr.text == "ab"
+    assert evidence.items[0].ocr.truncated is True
+
+
+def test_lowered_media_limits_are_rechecked_before_analysis() -> None:
+    configuration = MediaAnalysisConfiguration(
+        limits=MediaAnalysisLimits(max_image_bytes=4, max_image_pixels=50)
+    )
+    evidence, qr, ocr = analyze(
+        acquired(downloaded(b"image")),
+        configuration=configuration,
+    )
+
+    assert evidence.items[0].status == MediaItemStatus.FAILED
+    assert evidence.items[0].reason == MediaItemReason.TOO_LARGE
+    assert qr.calls == []
+    assert ocr.calls == []
+
+
+def test_download_batch_must_match_recorded_article_limits() -> None:
+    downloads = acquired(downloaded(b"one"), downloaded(b"two"))
+    configuration = MediaAnalysisConfiguration(
+        limits=MediaAnalysisLimits(max_article_images=1)
+    )
+
+    with pytest.raises(ValueError, match="Article image limit"):
+        analyze(downloads, configuration=configuration)
 
 
 def test_omitted_downloads_remain_visible_and_make_evidence_partial() -> None:

@@ -12,6 +12,7 @@ from wxcli.media.models import (
     MAX_IMAGE_BYTES,
     MAX_IMAGE_PIXELS,
     MediaAnalysisConfiguration,
+    MediaAnalysisLimits,
     MediaEvidence,
     MediaFormat,
     MediaItemEvidence,
@@ -71,6 +72,7 @@ class ArticleMediaAnalyzer:
     ) -> MediaEvidence:
         """Produce linked Media Evidence without network or credential access."""
         actual_configuration = configuration or MediaAnalysisConfiguration()
+        _validate_download_bounds(downloads, actual_configuration.limits)
         started_at = self._now()
         analyzed: dict[str, tuple[QREvidence, OCREvidence]] = {}
         items: list[MediaItemEvidence] = []
@@ -84,16 +86,27 @@ class ArticleMediaAnalyzer:
                 continue
             assert acquisition.media is not None
             media = acquisition.media
-            if not _is_validated_media(media):
-                items.append(_invalid_media_item(acquisition))
+            failure_reason = _media_failure_reason(
+                media,
+                actual_configuration.limits,
+            )
+            if failure_reason is not None:
+                items.append(_invalid_media_item(acquisition, failure_reason))
                 continue
             if media.byte_sha256 not in analyzed:
                 analyzed[media.byte_sha256] = self._analyze_once(
                     media,
                     requested_language=actual_configuration.ocr_language,
+                    limits=actual_configuration.limits,
                 )
             qr, raw_ocr = analyzed[media.byte_sha256]
-            ocr, consumed = _bound_ocr_output(raw_ocr, remaining_ocr_characters)
+            ocr, consumed = _bound_ocr_output(
+                raw_ocr,
+                min(
+                    remaining_ocr_characters,
+                    actual_configuration.limits.max_ocr_characters_per_image,
+                ),
+            )
             remaining_ocr_characters -= consumed
             items.append(_analyzed_item(acquisition, qr=qr, ocr=ocr))
 
@@ -111,10 +124,19 @@ class ArticleMediaAnalyzer:
         media: DownloadedMedia,
         *,
         requested_language: str,
+        limits: MediaAnalysisLimits,
     ) -> tuple[QREvidence, OCREvidence]:
         try:
             qr = self._qr_analyzer.analyze(media)
-            if qr.source_byte_sha256 != media.byte_sha256:
+            if (
+                qr.source_byte_sha256 != media.byte_sha256
+                or len(qr.payloads) > limits.max_qr_payloads_per_image
+                or any(
+                    len(payload.payload.encode("utf-8"))
+                    > limits.max_qr_payload_bytes
+                    for payload in qr.payloads
+                )
+            ):
                 qr = _failed_qr(media.byte_sha256)
         except Exception:
             qr = _failed_qr(media.byte_sha256)
@@ -134,16 +156,33 @@ class ArticleMediaAnalyzer:
         return qr, ocr
 
 
-def _is_validated_media(media: DownloadedMedia) -> bool:
-    return (
-        1 <= media.byte_length <= MAX_IMAGE_BYTES
-        and media.byte_length == len(media.content)
-        and hashlib.sha256(media.content).hexdigest() == media.byte_sha256
-        and media.width >= 1
-        and media.height >= 1
-        and media.width * media.height <= MAX_IMAGE_PIXELS
-        and media.media_type == _FORMAT_MEDIA_TYPES.get(media.media_format)
-    )
+def _validate_download_bounds(
+    downloads: ArticleMediaDownloads,
+    limits: MediaAnalysisLimits,
+) -> None:
+    if len(downloads.items) > limits.max_article_images:
+        raise ValueError("Media downloads exceed the configured Article image limit.")
+    if downloads.total_bytes > limits.max_article_bytes:
+        raise ValueError("Media downloads exceed the configured Article byte limit.")
+
+
+def _media_failure_reason(
+    media: DownloadedMedia,
+    limits: MediaAnalysisLimits,
+) -> MediaItemReason | None:
+    if (
+        media.byte_length != len(media.content)
+        or hashlib.sha256(media.content).hexdigest() != media.byte_sha256
+        or media.width < 1
+        or media.height < 1
+        or media.media_type != _FORMAT_MEDIA_TYPES.get(media.media_format)
+    ):
+        return MediaItemReason.MALFORMED_IMAGE
+    if not 1 <= media.byte_length <= min(MAX_IMAGE_BYTES, limits.max_image_bytes):
+        return MediaItemReason.TOO_LARGE
+    if media.width * media.height > min(MAX_IMAGE_PIXELS, limits.max_image_pixels):
+        return MediaItemReason.PIXEL_LIMIT
+    return None
 
 
 def _unavailable_item(acquisition: MediaAcquisitionItem) -> MediaItemEvidence:
@@ -161,12 +200,15 @@ def _unavailable_item(acquisition: MediaAcquisitionItem) -> MediaItemEvidence:
     )
 
 
-def _invalid_media_item(acquisition: MediaAcquisitionItem) -> MediaItemEvidence:
+def _invalid_media_item(
+    acquisition: MediaAcquisitionItem,
+    reason: MediaItemReason,
+) -> MediaItemEvidence:
     return MediaItemEvidence(
         index=acquisition.index,
         source_url=acquisition.source_url,
         status=MediaItemStatus.FAILED,
-        reason=MediaItemReason.MALFORMED_IMAGE,
+        reason=reason,
     )
 
 
