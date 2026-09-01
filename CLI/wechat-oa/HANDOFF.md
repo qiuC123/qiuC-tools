@@ -21,7 +21,7 @@
 
 ### 当前 Git 与发布状态
 
-- 本轮开发分支：`codex/discovery-media-analysis`，基于已经合并 PR #10 的 `main`。
+- 本轮开发分支：`codex/browser-interactive-verification`，基于已经合并 PR #11 的 `main`。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
 - 原独立仓库的 `v0.5.1` 指向上述验收提交；monorepo 使用带工具名的发布标签，避免未来多个 CLI 的版本标签冲突。
 - monorepo 发布标签：`wechat-oa-v0.5.1`。该标签指向迁移和发布元数据提交；运行时代码仍对应已经验收的 0.5.1 基线。
@@ -35,7 +35,8 @@
 - PR #8 已合并 QR/OCR 分析编排：对下载结果做防御性复验，相同图片字节按 SHA-256 只分析一次并映射回每个文章图片位置；QR 与 OCR 失败互相隔离，错误哈希/语言关联被替换为稳定失败证据；调用方降低后的图片、QR、OCR 和文章限额由编排层再次强制执行；下载省略数进入 Media Evidence、摘要和稳定哈希。合并前本地完整验证为 356 项 pytest 全绿，mypy 检查 44 个源文件无错误；PyInstaller 与远端 Windows 包冒烟通过。
 - PR #9 已合并 `article get` 和 `article evidence` 的默认关闭 `--analyze-media`。显式启用后先生成 Article Evidence，再安全下载图片并返回外层 schema v2；不开启时不构造 Media Cache、下载器或分析器，原输出不变。媒体模式下的 `--no-cache` 同时禁用文章和图片缓存。合并前 362 项 pytest、mypy、Skill 校验和 Windows 打包 CI 通过。
 - PR #10 已合并纯本地 `media doctor`：检查 JPEG/PNG/WebP/GIF，执行内存标准 QR 往返自检，通过受限 PowerShell 查询 Windows OCR、安装语言和默认 `zh-Hans` 可用性；不联网、不读凭据/缓存、不启动 Chrome、不安装组件。图片或 QR 缺失令整体失败，Windows OCR 缺失只保留可选能力状态。本地完整验证为 373 项 pytest 全绿，mypy 检查 45 个源文件无错误，canonical Skill 校验通过；开发环境和临时 PyInstaller onedir 中的 `wechat-oa`/`wxcli` 双命令均实测 `overall: pass`，OCR 语言为 `en-US`、`zh-Hans-CN`，默认语言可用。
-- 本轮完成发现批次的显式媒体分析：`discovery search --hydrate --analyze-media` 和 `discovery hydrate --input ... --analyze-media` 只分析已经成功生成 Article Evidence 的候选；不开启时原 schema v1 输出与资源构造均不变。开启后返回外层 schema v2，完整保留 Direct Discovery 或 Candidate Ingestion schema v1，并按 `candidate_index`、`article_identity` 和 `content_sha256` 关联独立 Media Evidence。Candidate Batch 不能自行开启媒体分析、选择限额或授权浏览器；批次限额为最多 200 个图片项、400 MiB 下载字节和 1,000,000 个 OCR 字符。本地完整验证为 382 项 pytest 全绿，mypy 检查 46 个源文件无错误，canonical Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
+- PR #11 已合并发现批次的显式媒体分析：`discovery search --hydrate --analyze-media` 和 `discovery hydrate --input ... --analyze-media` 只分析已经成功生成 Article Evidence 的候选；不开启时原 schema v1 输出与资源构造均不变。开启后返回外层 schema v2，完整保留 Direct Discovery 或 Candidate Ingestion schema v1，并按 `candidate_index`、`article_identity` 和 `content_sha256` 关联独立 Media Evidence。Candidate Batch 不能自行开启媒体分析、选择限额或授权浏览器；批次限额为最多 200 个图片项、400 MiB 下载字节和 1,000,000 个 OCR 字符。本地完整验证为 382 项 pytest 全绿，mypy 检查 46 个源文件无错误，canonical Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
+- 本轮新增 `browser verify ARTICLE_URL` 交互式验证流程，修复自动 fallback 识别验证码后立即关闭 Chrome、调用 Agent 误以为窗口仍在等待的问题。无人值守 fallback 继续立即返回 `VERIFICATION_REQUIRED`；只有用户另行明确授权时，新命令才在专用可见 profile 中打开确切文章并最多等待 5 分钟，只观察页面分类、不点击或绕过验证，成功后直接返回 Article Evidence。canonical Skill 明确禁止使用 computer-use、窗口激活或通用浏览器自动化接管验证窗口。本地完整验证为 387 项 pytest 全绿，mypy 检查 46 个源文件无错误，Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
 
 ### 下一步计划
 
