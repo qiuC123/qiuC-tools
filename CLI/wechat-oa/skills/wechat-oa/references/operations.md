@@ -55,6 +55,20 @@ wechat-oa --json doctor
 wechat-oa --json doctor --allow-live-api
 ```
 
+## Media Doctor
+
+只有 `wechat-oa media --help` 已列出 `doctor` 时，才运行开发版 0.6 的纯本地媒体检查：
+
+```powershell
+wechat-oa --json media doctor
+```
+
+它检查打包图片解码器和标准二维码，并查询 Windows OCR、已安装语言及默认
+`zh-Hans` 可用性。它不联网、不读取凭据或缓存、不启动 Chrome，也不安装语言包。
+`overall: fail` 表示必需的图片/二维码能力缺失；Windows OCR 的 `unavailable` 或
+`failed` 是可选能力状态，不要把它误报成整个工具不可用。旧版未列出该命令时，只报告
+当前安装版本不支持 Media Doctor，不要据此判断 OCR 不可用。
+
 ## 浏览器
 
 ```powershell

@@ -21,7 +21,7 @@
 
 ### 当前 Git 与发布状态
 
-- 当前开发分支：`codex/media-analysis-cli`，基于已经合并 PR #8 的 `main`。
+- 当前开发分支：`codex/media-doctor`，基于已经合并 PR #9 的 `main`。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
 - 原独立仓库的 `v0.5.1` 指向上述验收提交；monorepo 使用带工具名的发布标签，避免未来多个 CLI 的版本标签冲突。
 - monorepo 发布标签：`wechat-oa-v0.5.1`。该标签指向迁移和发布元数据提交；运行时代码仍对应已经验收的 0.5.1 基线。
@@ -33,13 +33,14 @@
 - `main` 的 PR #6 已修复 Chrome 在 `domcontentloaded` 后立即截图、静态解析器只识别 `<img>` 导致正文海报漏检的问题；真实文章复验从 4 个页尾图片 URL 提升到 33 个正文/页尾图片 URL，33 张图片全部通过安全下载器下载，Windows 本地 OCR 对 20 张产生非空文本且无引擎失败，真实图片和文字未写入 Git。
 - PR #7 已合并可替换的 `OCRProvider`/`OCRRuntime` 与默认 `WindowsOCRProvider`：重新校验图片字节/哈希/尺寸/像素，最多 64 个重叠长图切片，稀疏结果最多一次受限放大、灰度和自动对比度重试，每次 Windows 进程限时 30 秒；不联网、不纠错，选择的预处理步骤进入 OCR Evidence。固定 PowerShell 桥接使用短期 PNG 和结构化 stdin，Base64 包装 UTF-8 JSON 防止控制台编码损坏，缺少引擎/语言与执行失败保持独立状态。合并前本地完整验证为 344 项 pytest 全绿，mypy 检查 43 个源文件无错误；真实本机合成中文图片字符码核对通过，PyInstaller 双命令发布包及离线冒烟通过。
 - PR #8 已合并 QR/OCR 分析编排：对下载结果做防御性复验，相同图片字节按 SHA-256 只分析一次并映射回每个文章图片位置；QR 与 OCR 失败互相隔离，错误哈希/语言关联被替换为稳定失败证据；调用方降低后的图片、QR、OCR 和文章限额由编排层再次强制执行；下载省略数进入 Media Evidence、摘要和稳定哈希。合并前本地完整验证为 356 项 pytest 全绿，mypy 检查 44 个源文件无错误；PyInstaller 与远端 Windows 包冒烟通过。
-- 当前分支为 `article get` 和 `article evidence` 增加默认关闭的 `--analyze-media`。显式启用后先生成 Article Evidence，再安全下载图片并返回外层 schema v2；不开启时不构造 Media Cache、下载器或分析器，原输出不变。媒体模式下的 `--no-cache` 同时禁用文章和图片缓存。发现批次媒体控制、能力 Doctor、派生结果缓存和 Evidence Bundle 仍未实现。本地完整验证为 362 项 pytest 全绿，mypy 检查 44 个源文件无错误；仓库内 canonical Skill 通过官方校验；临时 PyInstaller onedir 构建、版本/JSON 启动及两个文章命令的新开关帮助冒烟通过。
+- PR #9 已合并 `article get` 和 `article evidence` 的默认关闭 `--analyze-media`。显式启用后先生成 Article Evidence，再安全下载图片并返回外层 schema v2；不开启时不构造 Media Cache、下载器或分析器，原输出不变。媒体模式下的 `--no-cache` 同时禁用文章和图片缓存。合并前 362 项 pytest、mypy、Skill 校验和 Windows 打包 CI 通过。
+- 当前分支实现纯本地 `media doctor`：检查 JPEG/PNG/WebP/GIF，执行内存标准 QR 往返自检，通过受限 PowerShell 查询 Windows OCR、安装语言和默认 `zh-Hans` 可用性；不联网、不读凭据/缓存、不启动 Chrome、不安装组件。图片或 QR 缺失令整体失败，Windows OCR 缺失只保留可选能力状态。本机双命令实测 `overall: pass`，OCR 语言为 `en-US`、`zh-Hans-CN`，默认语言可用。
 
 ### 下一步计划
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 0.6.0 的媒体模型、安全下载、原始字节缓存、二维码、Windows OCR、分析编排和单篇文章显式 CLI 控制已经完成；下一步补能力 Doctor 和发现批次的可信本地控制，再实现可审计的 Evidence Bundle。
+1. 0.6.0 的媒体模型、安全下载、原始字节缓存、二维码、Windows OCR、分析编排、单篇文章显式 CLI 控制和能力 Doctor 已完成；下一步补发现批次的可信本地控制，再实现可审计的 Evidence Bundle。
 2. 招聘雷达只做可选消费方：继续接受原 Article Evidence schema，图片证据必须是新增兼容字段或独立文档，不能要求招聘雷达同步升级才能继续使用。
 3. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
 

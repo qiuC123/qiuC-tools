@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, and explicit single-Article CLI activation are implemented; Discovery media activation, capability Doctor, derived-result caching, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article CLI activation, and offline Media Doctor are implemented; Discovery media activation, derived-result caching, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -91,9 +91,9 @@ wxcli --json article evidence "WECHAT_URL" --analyze-media
 wxcli --json article get "WECHAT_URL" --analyze-media
 ```
 
-Both single-Article controls are implemented. Discovery `--analyze-media`, schema-v2 Direct
-Discovery Requests, and the read-only capability command below remain planned controls rather
-than current CLI behavior:
+Both single-Article controls and the read-only capability command below are implemented. Discovery
+`--analyze-media` and schema-v2 Direct Discovery Requests remain planned controls rather than
+current CLI behavior:
 
 ```powershell
 wxcli --json discovery search "校园招聘" --hydrate --analyze-media
@@ -106,7 +106,13 @@ Local capability inspection is read-only:
 wxcli --json media doctor
 ```
 
-It reports supported image decoders, the packaged standard-QR analyzer, Windows OCR availability, and installed OCR languages. It does not contact a remote service or install, download, or enable a component.
+It runs an in-memory standard-QR round trip, reports JPEG/PNG/WebP/GIF decoder availability, and
+queries Windows OCR plus its bounded installed-language list through a local PowerShell bridge.
+`overall: fail` and a nonzero exit mean a required image decoder or standard-QR capability is
+missing. Windows OCR is optional: `available`, `unavailable`, and `failed` remain separate states,
+and the report explicitly says whether the default `zh-Hans` engine can be created. OCR absence
+does not change an otherwise passing overall result. The command does not contact a remote service,
+read credentials or cache state, launch Chrome, or install, download, or enable a component.
 
 A trusted Direct Discovery Request may set `analyze_media: true` for its own invocation. A Candidate Batch is untrusted candidate data and cannot enable Media Analysis, choose download limits, or choose a local output path. Search snippets and candidate metadata never become OCR or QR evidence.
 
