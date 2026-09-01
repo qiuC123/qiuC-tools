@@ -227,6 +227,10 @@ $browserStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'brows
 if (-not $browserStatus.ok) {
     throw 'Packaged wxcli browser status smoke test failed.'
 }
+$browserHelp = Invoke-PackagedWxcli @('browser', '--help')
+if ($browserHelp.Stdout -notmatch '\bverify\b') {
+    throw 'Packaged WeChat OA browser verify command is missing.'
+}
 $browserPolicyStatus = ConvertFrom-SingleJson (
     Invoke-PackagedWxcli @('--json', 'browser', 'policy', 'status')
 )

@@ -8,14 +8,18 @@ import json
 import pytest
 import httpx
 from playwright.sync_api import Error as PlaywrightError
+from typer.testing import CliRunner
 
 import wxcli.browser as browser_module
+import wxcli.cli as cli_module
 from wxcli.browser import BrowserProfile, ProfileLock
 from wxcli.cache import ArticleCache
+from wxcli.cli import app
 from wxcli.errors import ErrorCode, WxcliError
 from wxcli.models import Provider
 from wxcli.providers.chrome import ChromeProvider
 from wxcli.providers.http import PublicHttpProvider
+from wxcli.public_article import PublicArticleParser
 
 
 class FakePage:
@@ -292,6 +296,55 @@ def test_browser_login_does_not_claim_a_successful_article_read(tmp_path: Path) 
     provider.open_login()
 
     assert profile.status().last_successful_read_at is None
+
+
+def test_browser_verify_cli_returns_evidence_from_interactive_article(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[tuple[str, bool]] = []
+    document = PublicArticleParser.parse(
+        '<h1 id="activity-name">Verified</h1><div id="js_content">正文</div>',
+        "https://mp.weixin.qq.com/s/T1",
+        Provider.CHROME,
+    )
+
+    class FakeChromeProvider:
+        def __init__(self, *_: object, **__: object) -> None: pass
+        def get_document_interactive(
+            self,
+            url: str,
+            *,
+            no_cache: bool = False,
+        ):
+            observed.append((url, no_cache))
+            return document
+
+    monkeypatch.setattr(cli_module, "ChromeProvider", FakeChromeProvider)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "browser",
+            "verify",
+            "https://mp.weixin.qq.com/s/T1",
+            "--no-cache",
+        ],
+    )
+
+    payload = json.loads(result.stdout)
+    assert result.exit_code == 0
+    assert payload["ok"] is True
+    assert payload["data"]["article"]["title"] == "Verified"
+    assert payload["data"]["article"]["provider"] == "chrome"
+    assert observed == [("https://mp.weixin.qq.com/s/T1", True)]
+
+
+def test_browser_help_exposes_explicit_verify_command() -> None:
+    result = CliRunner().invoke(app, ["browser", "--help"])
+
+    assert result.exit_code == 0
+    assert "verify" in result.stdout
 
 
 def test_interactive_verification_waits_for_exact_article_and_returns_document(
