@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit, urlunsplit
@@ -19,6 +20,7 @@ _BIZ_SCRIPT = re.compile(r"(?:\bvar\s+)?(?:__biz|biz)\s*[=:]\s*['\"]([^'\"]+)['\
 _PUBLISHED_SCRIPT = re.compile(
     r"(?:createTime|\bct)\s*[=:]\s*['\"]?(\d{10})(?!\d)"
 )
+_CSS_URL = re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +51,14 @@ class PublicArticleParser:
     """Parse a classified WeChat article page without performing network requests."""
 
     @classmethod
-    def parse(cls, html: str, url: str, provider: Provider) -> PublicArticleDocument:
+    def parse(
+        cls,
+        html: str,
+        url: str,
+        provider: Provider,
+        *,
+        observed_images: Sequence[str] = (),
+    ) -> PublicArticleDocument:
         soup = BeautifulSoup(html, "lxml")
         content = soup.select_one("#js_content")
         title = cls._text(soup.select_one("#activity-name")) or cls._og(soup, "og:title")
@@ -57,7 +66,7 @@ class PublicArticleParser:
             raise WxcliError(ErrorCode.PARSING_ERROR, "The article page is missing required content.")
 
         account_name = cls._text(soup.select_one("#js_name")) or None
-        images = cls._images(content)
+        images = cls._merge_images(observed_images, cls._images(content))
         links = cls._external_links(content)
         for image in content.select("img"):
             if data_src := image.get("data-src"):
@@ -98,11 +107,57 @@ class PublicArticleParser:
 
     @staticmethod
     def _images(content: Tag) -> list[str]:
+        values: list[str] = []
+        for node in content.select("*"):
+            name = node.name.casefold() if node.name else ""
+            if name == "img":
+                value = next(
+                    (
+                        node.get(attribute)
+                        for attribute in ("data-src", "data-original", "data-lazy-src", "src")
+                        if node.get(attribute)
+                    ),
+                    None,
+                )
+                if value:
+                    values.append(str(value))
+            elif name == "source":
+                for attribute in ("data-src", "src"):
+                    if value := node.get(attribute):
+                        values.append(str(value))
+                for attribute in ("data-srcset", "srcset"):
+                    if value := node.get(attribute):
+                        values.extend(PublicArticleParser._srcset_urls(str(value)))
+            elif name == "image":
+                if value := node.get("href") or node.get("xlink:href"):
+                    values.append(str(value))
+            elif name == "video":
+                if value := node.get("poster"):
+                    values.append(str(value))
+
+            if style := node.get("style"):
+                values.extend(match.group(2) for match in _CSS_URL.finditer(str(style)))
+        return PublicArticleParser._merge_images(values)
+
+    @staticmethod
+    def _srcset_urls(value: str) -> list[str]:
         return [
-            str(value)
-            for image in content.select("img")
-            if (value := image.get("data-src") or image.get("src"))
+            candidate.strip().split()[0]
+            for candidate in value.split(",")
+            if candidate.strip()
         ]
+
+    @staticmethod
+    def _merge_images(*groups: Sequence[str]) -> list[str]:
+        values: list[str] = []
+        seen: set[str] = set()
+        for group in groups:
+            for raw in group:
+                value = str(raw).strip()
+                if value and value not in seen:
+                    seen.add(value)
+                    values.append(value)
+        return values
 
     @classmethod
     def _published_at(cls, soup: BeautifulSoup) -> datetime | None:

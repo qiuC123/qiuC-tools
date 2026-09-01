@@ -126,6 +126,39 @@ def test_image_only_article_is_still_extractable() -> None:
     assert "poster.jpg" in document.article.content_markdown
 
 
+def test_parser_collects_extended_static_media_and_merges_runtime_observations() -> None:
+    html = """
+      <h1 id="activity-name">Campus hiring poster</h1>
+      <div id="js_content">
+        <img data-original="https://mmbiz.qpic.cn/image.jpg">
+        <picture><source srcset="https://mmbiz.qpic.cn/a.webp 1x, https://mmbiz.qpic.cn/b.webp 2x"></picture>
+        <svg><image xlink:href="https://mmbiz.qpic.cn/vector.png"></image></svg>
+        <video poster="https://mmbiz.qpic.cn/poster.jpg"></video>
+        <div style="background: url(https://mmbiz.qpic.cn/background.jpg)"></div>
+      </div>
+    """
+
+    document = PublicArticleParser.parse(
+        html,
+        "https://mp.weixin.qq.com/s/T",
+        Provider.CHROME,
+        observed_images=[
+            "https://mmbiz.qpic.cn/runtime.jpg",
+            "https://mmbiz.qpic.cn/image.jpg",
+        ],
+    )
+
+    assert document.article.images == [
+        "https://mmbiz.qpic.cn/runtime.jpg",
+        "https://mmbiz.qpic.cn/image.jpg",
+        "https://mmbiz.qpic.cn/a.webp",
+        "https://mmbiz.qpic.cn/b.webp",
+        "https://mmbiz.qpic.cn/vector.png",
+        "https://mmbiz.qpic.cn/poster.jpg",
+        "https://mmbiz.qpic.cn/background.jpg",
+    ]
+
+
 @pytest.mark.parametrize(
     ("expected", "status"),
     [

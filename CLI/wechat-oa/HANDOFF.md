@@ -1,6 +1,6 @@
 # WeChat OA 项目交接说明
 
-## 新项目接续摘要（2026-08-31）
+## 新项目接续摘要（2026-09-01）
 
 ### 当前工作位置
 
@@ -21,7 +21,7 @@
 
 ### 当前 Git 与发布状态
 
-- 当前分支：`main`；`codex/wechat-oa-rename` 已快进合并，0.5.1 是后续开发唯一基线。
+- 当前开发分支：`codex/chrome-media-discovery`，基于已经合并 PR #5 的 `main`。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
 - 原独立仓库的 `v0.5.1` 指向上述验收提交；monorepo 使用带工具名的发布标签，避免未来多个 CLI 的版本标签冲突。
 - monorepo 发布标签：`wechat-oa-v0.5.1`。该标签指向迁移和发布元数据提交；运行时代码仍对应已经验收的 0.5.1 基线。
@@ -29,7 +29,8 @@
 - canonical 源码已迁入 `https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`；原 `qiuC123/wechat-oa` 暂时保留为迁移兼容仓库，不再作为后续开发目标。
 - 正式发布包通过 GitHub Release 分发；本地 `dist\` 仍被 Git 忽略，不会随源码 push 或 clone 自动传输。
 - SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
-- `main` 已包含 0.6.0 安全图片下载器、原始字节 Media Cache、文章级数量/总字节编排和独立缓存清理命令，并已处理 PR #2/#3 的全部审阅项。当前 `codex/media-qr-decoder` 分支新增打包内置的本地标准二维码分析器：只识别 QR Code、复核图片字节与尺寸边界、限制 20 个/每个 4 KiB、净化终端控制字符，并把 URL/联系人内容作为惰性证据而不访问目标。本地 329 项 pytest 全绿，mypy 检查 42 个源文件无错误；全新 Python 3.12 环境按 `.[dev]` 安装得到 `zxing-cpp 3.1.1`，二维码与发布契约 17 项测试通过。远程结果以该分支 PR 的必需 CI 为准；`v0.5.1` 验收提交当时的结果仍为下文记录的 237 项。
+- `main` 已包含 0.6.0 安全图片下载器、原始字节 Media Cache、文章级数量/总字节编排、独立缓存清理命令和打包内置的本地标准二维码分析器，并已处理 PR #2/#3 的全部审阅项。
+- 当前分支修复 Chrome 在 `domcontentloaded` 后立即截图、静态解析器只识别 `<img>` 导致正文海报漏检的问题：文章页先分类，再在 `#js_content` 内执行最长 7 秒、最多 80 步/2,000 元素/200 URL 的只读懒加载观察；不点击、不跳转，识别普通/懒加载图片、`picture`/`source`、SVG 图片引用、视频封面和 CSS 背景，失败则保留静态正文。静态 HTTP 页面也支持这些标记类型。离线完整验证为 332 项 pytest 全绿，mypy 检查 42 个源文件无错误；未执行真实微信/Chrome 验收。
 
 ### 下一步计划
 

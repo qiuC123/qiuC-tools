@@ -61,6 +61,13 @@ media downloads. Derived QR/OCR result caching remains deferred until those anal
 
 Media Analysis turns image URLs already observed in a successfully read WeChat Article into bounded derived evidence. It supports recruitment posters and QR codes while preserving a strict distinction between WeChat source facts and machine-derived observations.
 
+`Article.images` may come from static Article markup or, for an explicitly authorized Chrome read,
+from its bounded read-only lazy-media scan. Supported observations include ordinary and lazy image
+attributes, `picture`/`source`, SVG image references, video posters, and CSS backgrounds inside the
+Article body. Observation alone performs no image request. The separate downloader remains the only
+component allowed to fetch an eligible URL and still enforces its exact host, DNS, redirect, byte,
+time, and decoder boundaries.
+
 It does not search for extra images, visit Article external links, open QR destinations, operate Mini Programs, search company websites or ATS systems, classify recruitment batches or jobs, upload images to a cloud OCR service, or change any Official Account content.
 
 ## Activation and trust boundary
