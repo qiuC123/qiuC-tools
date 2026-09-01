@@ -24,6 +24,8 @@ CHROME_PATH = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
 ARTICLE_TIMEOUT_MS = 30_000
 RUN_TIMEOUT_SECONDS = 300.0
 LOGIN_TIMEOUT_MS = 300_000
+INTERACTIVE_VERIFICATION_TIMEOUT_SECONDS = 300.0
+INTERACTIVE_VERIFICATION_POLL_MS = 500
 LOCK_TIMEOUT_SECONDS = 5.0
 MEDIA_SCAN_MAX_MS = 7_000
 MEDIA_SCAN_PAUSE_MS = 75
@@ -122,14 +124,34 @@ class ChromeRun:
         provider: ChromeProvider,
         *,
         deadline: float,
+        monotonic: Callable[[], float],
     ) -> None:
         self._context = context
         self._provider = provider
         self._deadline = deadline
+        self._monotonic = monotonic
 
     def get_document(self, url: str, *, no_cache: bool = False) -> PublicArticleDocument:
+        return self._get_document(url, no_cache=no_cache, wait_for_verification=False)
+
+    def get_document_interactive(
+        self,
+        url: str,
+        *,
+        no_cache: bool = False,
+    ) -> PublicArticleDocument:
+        """Keep the exact Article visible while a user completes verification."""
+        return self._get_document(url, no_cache=no_cache, wait_for_verification=True)
+
+    def _get_document(
+        self,
+        url: str,
+        *,
+        no_cache: bool,
+        wait_for_verification: bool,
+    ) -> PublicArticleDocument:
         normalized_url = validate_public_url(url)
-        remaining = self._deadline - time.monotonic()
+        remaining = self._deadline - self._monotonic()
         if remaining <= 0:
             raise WxcliError(ErrorCode.CHROME_ERROR, "The browser run deadline was reached.")
         timeout_ms = max(1, min(ARTICLE_TIMEOUT_MS, int(remaining * 1000)))
@@ -150,6 +172,40 @@ class ChromeRun:
                 ) from error
 
             kind = self._provider.classifier.classify(html)
+            while kind is PageKind.VERIFICATION and wait_for_verification:
+                remaining_ms = int((self._deadline - self._monotonic()) * 1000)
+                if remaining_ms <= 0:
+                    raise VerificationRequiredError(
+                        "The interactive browser verification timed out.",
+                        verification_stage="browser",
+                        required_action="run_browser_login",
+                        verification_outcome="timeout",
+                    )
+                if _page_is_closed(page):
+                    raise VerificationRequiredError(
+                        "The interactive browser window closed before the Article was readable.",
+                        verification_stage="browser",
+                        required_action="run_browser_login",
+                        verification_outcome="window_closed",
+                    )
+                try:
+                    page.wait_for_timeout(
+                        min(INTERACTIVE_VERIFICATION_POLL_MS, remaining_ms)
+                    )
+                    html = cast(str, page.content())
+                except PlaywrightError as error:
+                    if _page_is_closed(page):
+                        raise VerificationRequiredError(
+                            "The interactive browser window closed before the Article was readable.",
+                            verification_stage="browser",
+                            required_action="run_browser_login",
+                            verification_outcome="window_closed",
+                        ) from error
+                    raise WxcliError(
+                        ErrorCode.CHROME_ERROR,
+                        "Chrome could not continue the interactive verification session.",
+                    ) from error
+                kind = self._provider.classifier.classify(html)
             if kind is PageKind.VERIFICATION:
                 raise VerificationRequiredError(
                     verification_stage="browser",
@@ -164,7 +220,7 @@ class ChromeRun:
                 )
 
             observed_images: list[str] = []
-            remaining_ms = max(0, int((self._deadline - time.monotonic()) * 1000))
+            remaining_ms = max(0, int((self._deadline - self._monotonic()) * 1000))
             scan_ms = min(MEDIA_SCAN_MAX_MS, max(0, remaining_ms - 1_000))
             if scan_ms >= MEDIA_SCAN_PAUSE_MS:
                 max_steps = min(MEDIA_SCAN_MAX_STEPS, scan_ms // MEDIA_SCAN_PAUSE_MS)
@@ -212,11 +268,13 @@ class ChromeProvider:
         playwright_factory: Callable[[], Any] = sync_playwright,
         chrome_path: Path = CHROME_PATH,
         cache: ArticleCache | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self.browser_profile = browser_profile
         self.playwright_factory = playwright_factory
         self.chrome_path = chrome_path
         self.cache = cache
+        self._monotonic = monotonic
         self.classifier = WeChatPageClassifier()
 
     def get(self, url: str, *, no_cache: bool = False) -> Article:
@@ -232,12 +290,24 @@ class ChromeProvider:
         with self.open_run() as run:
             return run.get_document(normalized_url, no_cache=no_cache)
 
+    def get_document_interactive(
+        self,
+        url: str,
+        *,
+        no_cache: bool = False,
+        timeout_seconds: float = INTERACTIVE_VERIFICATION_TIMEOUT_SECONDS,
+    ) -> PublicArticleDocument:
+        """Open the exact Article and wait only for explicit manual verification."""
+        normalized_url = validate_public_url(url)
+        with self.open_run(timeout_seconds=timeout_seconds) as run:
+            return run.get_document_interactive(normalized_url, no_cache=no_cache)
+
     @contextmanager
     def open_run(self, *, timeout_seconds: float = RUN_TIMEOUT_SECONDS) -> Iterator[ChromeRun]:
         """Launch one visible persistent context and close it after the bounded run."""
         if not self.chrome_path.is_file():
             raise WxcliError(ErrorCode.CHROME_ERROR, "Google Chrome was not found at the configured path.")
-        deadline = time.monotonic() + timeout_seconds
+        deadline = self._monotonic() + timeout_seconds
         try:
             with ProfileLock(self.browser_profile.profile, timeout=LOCK_TIMEOUT_SECONDS):
                 with self.playwright_factory() as playwright:
@@ -248,7 +318,12 @@ class ChromeProvider:
                         timeout=min(ARTICLE_TIMEOUT_MS, max(1, int(timeout_seconds * 1000))),
                     )
                     try:
-                        yield ChromeRun(context, self, deadline=deadline)
+                        yield ChromeRun(
+                            context,
+                            self,
+                            deadline=deadline,
+                            monotonic=self._monotonic,
+                        )
                     finally:
                         context.close()
         except WxcliError:
@@ -298,3 +373,8 @@ class ChromeEvidenceService(EvidenceService):
         effective_timeout = RUN_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
         with self._chrome_provider.open_run(timeout_seconds=effective_timeout) as run:
             yield EvidenceService(run)
+
+
+def _page_is_closed(page: Any) -> bool:
+    is_closed = getattr(page, "is_closed", None)
+    return bool(is_closed()) if callable(is_closed) else False
