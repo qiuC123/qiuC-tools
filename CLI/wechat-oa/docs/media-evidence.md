@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, article-level acquisition orchestration, packaged local standard-QR analyzer, and replaceable Windows local-OCR provider are implemented; analysis orchestration, derived-result caching, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, article-level acquisition orchestration, packaged local standard-QR analyzer, replaceable Windows local-OCR provider, and bounded QR/OCR analysis orchestration are implemented; derived-result caching, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -11,7 +11,7 @@ The model contract lives in `src/wxcli/media/models.py`. It currently provides:
 - Media Evidence schema v1 and the explicit media-enabled outer result schema v2;
 - `MediaItemEvidence` with the stable `analyzed`, `skipped`, and `failed` statuses;
 - separate QR payload and local OCR outcomes linked to the exact image-byte SHA-256;
-- deterministic summary and `partial` values derived from item outcomes;
+- deterministic summary and `partial` values derived from item outcomes and bounded omitted counts;
 - hard resource-limit models that callers may lower but cannot raise above approved caps;
 - a stable Media Evidence SHA-256 that includes result-affecting configuration and derived
   observations while excluding run timestamps and cache-hit status; and
@@ -53,10 +53,19 @@ Every admitted occurrence counts toward the Article byte budget, including a rep
 from cache, so downstream decode and analysis memory remains bounded; the cache still avoids the
 second network request.
 
-The acquisition layer is an internal primitive and is not yet connected to Article Evidence,
-Media Evidence analysis, or a CLI control. Therefore the existing 0.5.1 commands still perform no
-media downloads. Derived QR/OCR result caching and the analysis orchestration that invokes both
-analyzers remain deferred.
+The acquisition layer remains an internal primitive and is not yet connected to Article Evidence
+or a CLI control. Therefore the existing 0.5.1 commands still perform no media downloads.
+
+Article-level analysis lives in `src/wxcli/media/analysis.py`. It consumes only bounded acquisition
+results, rechecks byte length, SHA-256, media type, dimensions, and pixel count before invoking a
+local analyzer, and analyzes identical bytes once per run. It then maps the immutable QR/OCR
+outcomes back to every Article image occurrence in source order, including each original URL and
+cache-hit observation. QR and OCR failures are isolated: an exception, wrong source hash, or wrong
+OCR language becomes a stable failed guard outcome without exposing analyzer diagnostics or
+preventing the other analyzer and later images from completing. The invocation-owned OCR batch
+character budget is applied to emitted occurrence text and records truncation. Acquisition skips,
+failures, and `omitted_count` remain visible in Media Evidence and deterministically set
+`partial: true`. Derived QR/OCR result caching remains deferred.
 
 ## Goal and non-goals
 
@@ -119,7 +128,7 @@ The Media Evidence document records:
 - the source `content_sha256`;
 - analysis start and finish times;
 - a stable Media Evidence hash that excludes run timestamps and cache-hit status;
-- `partial` and summary counts;
+- `partial`, bounded `omitted_count`, and summary counts;
 - one Media Item Evidence outcome per Article image occurrence.
 
 Each Media Item Evidence preserves the Article image index and source URL. Its stable top-level status is `analyzed`, `skipped`, or `failed`; a separate categorical reason explains outcomes such as `blocked_host`, `too_large`, `unsupported_format`, or `ocr_unavailable` without expanding the status enum. When download succeeds it may include byte SHA-256, media type, byte length, dimensions, QR Evidence, and OCR Evidence. A failed or skipped item never invents derived content.
@@ -173,8 +182,8 @@ byte hash, byte count, decoded dimensions, and pixel boundary before analysis. R
 strings: URLs and contact payloads are classified for evidence only and are never opened or
 requested. C0/C1 terminal control characters are replaced before a payload enters evidence. More
 than 20 decoded symbols, a payload above 4 KiB, malformed input, or an engine error produces one
-bounded `failed` QR outcome without partial payloads. This analyzer is currently an internal
-primitive and does not make existing CLI commands download or analyze images.
+bounded `failed` QR outcome without partial payloads. The analysis orchestrator invokes this
+internal primitive, but existing CLI commands still do not download or analyze images.
 
 Each decoded payload is an inert string with its source image, payload hash, stable location ordering, and a conservative type such as URL, text, contact, or unknown. One image may produce at most 20 payloads and each payload is limited to 4 KB. Excess items or bytes receive explicit bounded-limit outcomes. wxcli never opens the payload, follows redirects, launches Chrome, invokes another application, executes commands, or promotes it to an External Link Handoff without an explicit future contract.
 
@@ -222,9 +231,9 @@ Core Article Evidence is the prerequisite and remains successful when a media it
 
 Downloaded bytes are keyed by SHA-256. Identical bytes are decoded, QR-scanned, and OCR-processed once, while Media Item Evidence preserves every Article occurrence and source URL that referred to those bytes.
 
-Derived cache keys also include analyzer identity and version, OCR language, normalization version, and relevant analysis configuration. An engine, language, or configuration change re-runs analysis. The unchanged original image bytes may still be reused safely by SHA-256.
+A future derived-result cache key must also include analyzer identity and version, OCR language, normalization version, and relevant analysis configuration. An engine, language, or configuration change must re-run analysis. The unchanged original image bytes may still be reused safely by SHA-256.
 
-The dedicated Media Cache retains public image bytes and derived results for seven days and is capped at 1 GB. Eviction is deterministic and never removes an explicit Evidence Bundle. Cache records contain no Cookie, authorization header, API key, browser state, raw HTTP request, or caller-owned secret.
+The implemented Media Cache retains only public original image bytes for seven days and is capped at 1 GB. Eviction is deterministic and never removes an explicit Evidence Bundle. Cache records contain no Cookie, authorization header, API key, browser state, raw HTTP request, or caller-owned secret. Derived-result storage remains deferred.
 
 Every cache read recomputes and verifies the expected byte SHA-256 before decoding or analysis. A mismatched or unreadable entry is removed individually and may be downloaded again under the normal policy. Cleanup removes expired entries first and then evicts the least recently used entries until the cache is within 1 GB. An invalid cache entry never becomes Media Evidence.
 
