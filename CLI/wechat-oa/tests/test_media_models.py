@@ -239,6 +239,14 @@ def test_ocr_normalizes_text_and_rejects_derived_data_on_failure() -> None:
             status=OCRStatus.FAILED,
             text="invented",
         )
+    with pytest.raises(ValidationError, match="cannot contain derived text"):
+        OCREvidence(
+            source_byte_sha256=digest("a"),
+            analyzer="windows-ocr",
+            analyzer_version="1.0",
+            status=OCRStatus.UNAVAILABLE,
+            preprocessing=("grayscale",),
+        )
 
 
 def test_item_outcomes_reject_invented_or_mismatched_analysis() -> None:

@@ -38,6 +38,17 @@ from wxcli.media.models import (
     QRStatus,
     build_media_evidence,
 )
+from wxcli.media.ocr import (
+    OCR_ATTEMPT_TIMEOUT_SECONDS,
+    OCRExecutionError,
+    OCRProvider,
+    OCRRuntime,
+    OCRUnavailableError,
+    WINDOWS_OCR_ANALYZER,
+    WINDOWS_OCR_ANALYZER_VERSION,
+    WindowsOCRProvider,
+    WindowsPowerShellOCRRuntime,
+)
 from wxcli.media.orchestration import (
     ArticleMediaDownloader,
     ArticleMediaDownloads,
@@ -83,7 +94,12 @@ __all__ = [
     "MediaItemStatus",
     "MediaSummary",
     "OCREvidence",
+    "OCRExecutionError",
+    "OCRProvider",
+    "OCRRuntime",
     "OCRStatus",
+    "OCRUnavailableError",
+    "OCR_ATTEMPT_TIMEOUT_SECONDS",
     "QREvidence",
     "QRPayloadEvidence",
     "QRPayloadType",
@@ -93,6 +109,10 @@ __all__ = [
     "StandardQRAnalyzer",
     "StandardQRDecoder",
     "SystemHostResolver",
+    "WINDOWS_OCR_ANALYZER",
+    "WINDOWS_OCR_ANALYZER_VERSION",
+    "WindowsOCRProvider",
+    "WindowsPowerShellOCRRuntime",
     "ZXingStandardQRDecoder",
     "build_media_evidence",
 ]
