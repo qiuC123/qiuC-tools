@@ -69,6 +69,7 @@ class ArticleMediaAnalyzer:
         source_content_sha256: str,
         downloads: ArticleMediaDownloads,
         configuration: MediaAnalysisConfiguration | None = None,
+        ocr_character_budget: int | None = None,
     ) -> MediaEvidence:
         """Produce linked Media Evidence without network or credential access."""
         actual_configuration = configuration or MediaAnalysisConfiguration()
@@ -76,8 +77,16 @@ class ArticleMediaAnalyzer:
         started_at = self._now()
         analyzed: dict[str, tuple[QREvidence, OCREvidence]] = {}
         items: list[MediaItemEvidence] = []
+        if ocr_character_budget is not None and not (
+            0
+            <= ocr_character_budget
+            <= actual_configuration.limits.max_ocr_characters_per_batch
+        ):
+            raise ValueError("OCR character budget exceeds the configured limit.")
         remaining_ocr_characters = (
             actual_configuration.limits.max_ocr_characters_per_batch
+            if ocr_character_budget is None
+            else ocr_character_budget
         )
 
         for acquisition in downloads.items:

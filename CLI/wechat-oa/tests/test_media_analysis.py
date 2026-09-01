@@ -176,6 +176,35 @@ def analyze(
     return evidence, actual_qr, actual_ocr
 
 
+def test_analysis_accepts_a_stricter_invocation_ocr_budget() -> None:
+    evidence = ArticleMediaAnalyzer(
+        FakeQRAnalyzer(),
+        FakeOCRProvider(text="校园招聘"),
+        now=Clock(),
+    ).analyze(
+        source_content_sha256="a" * 64,
+        downloads=acquired(downloaded(b"image")),
+        ocr_character_budget=2,
+    )
+
+    assert evidence.items[0].ocr is not None
+    assert evidence.items[0].ocr.text == "校园"
+    assert evidence.items[0].ocr.truncated is True
+
+
+def test_analysis_rejects_an_ocr_budget_above_the_recorded_configuration() -> None:
+    with pytest.raises(ValueError, match="OCR character budget"):
+        ArticleMediaAnalyzer(
+            FakeQRAnalyzer(),
+            FakeOCRProvider(),
+            now=Clock(),
+        ).analyze(
+            source_content_sha256="a" * 64,
+            downloads=acquired(),
+            ocr_character_budget=1_000_001,
+        )
+
+
 def test_analysis_preserves_occurrences_but_deduplicates_identical_bytes() -> None:
     first = downloaded(b"same", source_url="https://mmbiz.qpic.cn/example/first")
     second = downloaded(b"same", source_url="https://mmbiz.qpic.cn/example/second")
