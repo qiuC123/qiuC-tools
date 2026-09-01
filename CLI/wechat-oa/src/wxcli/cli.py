@@ -34,10 +34,17 @@ from wxcli.evidence import ArticleEvidence, EvidenceService
 from wxcli.discovery.auth import DiscoverySecretStore
 from wxcli.discovery.brave import BraveDiscoveryProvider
 from wxcli.discovery.ingestion import CandidateIngestionService
+from wxcli.discovery.media import (
+    DiscoveryMediaAnalysisResult,
+    DiscoveryMediaAnalyzer,
+    DiscoveryMediaBudget,
+)
 from wxcli.discovery.models import (
     MAX_CANDIDATE_BATCH_BYTES,
     CandidateBatchRequest,
+    CandidateIngestionResult,
     DiscoveryRequest,
+    DiscoveryResult,
 )
 from wxcli.discovery.service import DiscoveryService, validate_discovery_tokens
 from wxcli.discovery.store import DiscoveryStore
@@ -45,10 +52,12 @@ from wxcli.media import (
     ArticleMediaAnalyzer,
     ArticleMediaDownloader,
     MediaAnalysisConfiguration,
+    MediaAnalysisLimits,
     MediaAnalysisResult,
     MediaCache,
     MediaDoctor,
     MediaDownloader,
+    MediaEvidence,
 )
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.official_draft import OfficialDraftWriter
@@ -343,23 +352,79 @@ def _media_analysis_result(
     *,
     no_cache: bool = False,
 ) -> MediaAnalysisResult:
+    return MediaAnalysisResult(
+        article_evidence=evidence,
+        media_evidence=_media_evidence(evidence, no_cache=no_cache),
+    )
+
+
+def _media_evidence(
+    evidence: ArticleEvidence,
+    *,
+    no_cache: bool = False,
+    budget: DiscoveryMediaBudget | None = None,
+    downloader: MediaDownloader | None = None,
+    analyzer: ArticleMediaAnalyzer | None = None,
+    cache: MediaCache | None = None,
+) -> MediaEvidence:
     configuration = default_media_analysis_configuration()
+    if budget is not None:
+        configuration = configuration.model_copy(
+            update={
+                "limits": MediaAnalysisLimits.model_validate(
+                    configuration.limits.model_dump()
+                    | {
+                        "max_article_images": budget.max_images,
+                        "max_article_bytes": budget.max_bytes,
+                        "max_ocr_characters_per_batch": budget.max_ocr_characters,
+                    }
+                )
+            }
+        )
+    actual_downloader = downloader or MediaDownloader(
+        max_bytes=configuration.limits.max_image_bytes,
+        max_pixels=configuration.limits.max_image_pixels,
+    )
     downloads = ArticleMediaDownloader(
-        MediaDownloader(
-            max_bytes=configuration.limits.max_image_bytes,
-            max_pixels=configuration.limits.max_image_pixels,
-        ),
-        cache=None if no_cache else default_media_cache(),
+        actual_downloader,
+        cache=None if no_cache else (cache or default_media_cache()),
         limits=configuration.limits,
     ).download(evidence.article)
-    media_evidence = ArticleMediaAnalyzer().analyze(
+    actual_analyzer = analyzer or ArticleMediaAnalyzer()
+    if budget is None:
+        return actual_analyzer.analyze(
+            source_content_sha256=evidence.content_sha256,
+            downloads=downloads,
+            configuration=configuration,
+        )
+    return actual_analyzer.analyze(
         source_content_sha256=evidence.content_sha256,
         downloads=downloads,
         configuration=configuration,
+        ocr_character_budget=budget.max_ocr_characters,
     )
-    return MediaAnalysisResult(
-        article_evidence=evidence,
-        media_evidence=media_evidence,
+
+
+def _discovery_media_analysis_result(
+    discovery_result: DiscoveryResult | CandidateIngestionResult,
+) -> DiscoveryMediaAnalysisResult:
+    configuration = default_media_analysis_configuration()
+    downloader = MediaDownloader(
+        max_bytes=configuration.limits.max_image_bytes,
+        max_pixels=configuration.limits.max_image_pixels,
+    )
+    analyzer = ArticleMediaAnalyzer()
+    cache = default_media_cache()
+    return DiscoveryMediaAnalyzer(
+        lambda evidence, budget: _media_evidence(
+            evidence,
+            budget=budget,
+            downloader=downloader,
+            analyzer=analyzer,
+            cache=cache,
+        )
+    ).analyze(
+        discovery_result
     )
 
 
@@ -377,6 +442,11 @@ def discovery_search(
     checkpoint: str | None = typer.Option(None, "--checkpoint", help="Opaque incremental checkpoint."),
     new_only: bool = typer.Option(False, "--new-only", help="Return only newly observed candidates."),
     hydrate: bool = typer.Option(False, "--hydrate", help="Read selected WeChat source pages."),
+    analyze_media: bool = typer.Option(
+        False,
+        "--analyze-media",
+        help="After hydration, explicitly download eligible images and run local QR/OCR analysis.",
+    ),
     priority_hydrate: int = typer.Option(10, "--priority-hydrate", min=0, max=20),
     max_hydrate: int = typer.Option(20, "--max-hydrate", min=0, max=20),
     require_account_match: bool = typer.Option(False, "--require-account-match"),
@@ -415,6 +485,8 @@ def discovery_search(
         require_published_date=require_published_date,
         allow_browser=browser or browser_fallback,
     )
+    if analyze_media and not request.hydrate:
+        raise InputError("--analyze-media requires --hydrate.")
     decision = resolve_browser_decision(
         default_browser_policy(),
         browser=browser,
@@ -448,7 +520,10 @@ def discovery_search(
             browser_evidence=browser_evidence,
             browser_decision=decision,
         )
-        output.success(service.search(request))
+        result = service.search(request)
+        output.success(
+            _discovery_media_analysis_result(result) if analyze_media else result
+        )
 
 
 @discovery_app.command("hydrate")
@@ -473,6 +548,11 @@ def discovery_hydrate(
         False,
         "--no-browser",
         help="Prohibit Chrome even when durable fallback is enabled.",
+    ),
+    analyze_media: bool = typer.Option(
+        False,
+        "--analyze-media",
+        help="Explicitly download eligible images and run local QR/OCR analysis.",
     ),
 ) -> None:
     """Validate and hydrate one agent-orchestrated Candidate Batch."""
@@ -509,16 +589,17 @@ def discovery_hydrate(
             http_evidence=http_evidence,
             browser_evidence=browser_evidence,
         )
+        result = service.ingest(
+            batch,
+            priority_hydrate=priority_hydrate,
+            max_hydrate=max_hydrate,
+            require_account_match=require_account_match,
+            require_published_date=require_published_date,
+            allow_browser=decision.allows_fallback,
+            browser_decision=decision,
+        )
         output.success(
-            service.ingest(
-                batch,
-                priority_hydrate=priority_hydrate,
-                max_hydrate=max_hydrate,
-                require_account_match=require_account_match,
-                require_published_date=require_published_date,
-                allow_browser=decision.allows_fallback,
-                browser_decision=decision,
-            )
+            _discovery_media_analysis_result(result) if analyze_media else result
         )
 
 

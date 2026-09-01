@@ -209,6 +209,14 @@ foreach ($command in @('search', 'hydrate', 'auth', 'cache')) {
         throw "Packaged wxcli discovery help is missing command: $command"
     }
 }
+$discoverySearchHelp = Invoke-PackagedWxcli @('discovery', 'search', '--help')
+$discoveryHydrateHelp = Invoke-PackagedWxcli @('discovery', 'hydrate', '--help')
+if (
+    $discoverySearchHelp.Stdout -notmatch '--analyze-media' -or
+    $discoveryHydrateHelp.Stdout -notmatch '--analyze-media'
+) {
+    throw 'Packaged WeChat OA discovery media controls are missing.'
+}
 $discoveryAuthStatus = ConvertFrom-SingleJson (
     Invoke-PackagedWxcli @('--json', 'discovery', 'auth', 'status', '--provider', 'brave')
 )

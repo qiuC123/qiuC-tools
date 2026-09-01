@@ -1,6 +1,6 @@
 # WeChat Article Discovery Design
 
-**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; media evidence for 0.6.0 remains an approved design, not implemented.**
+**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; explicit, bounded Discovery media analysis is implemented for the 0.6.0 development line.**
 
 This document records the wxcli 0.4.0 discovery foundation and its backward-compatible 0.5.0 browser reliability extension. The implementation preserves existing commands, JSON envelopes, exit codes, cache behavior, and read-only safety boundaries. Live Brave, WeChat, and Chrome smoke tests still require separate explicit authorization.
 
@@ -51,6 +51,14 @@ Optional Hydration is explicit. Search without `--hydrate` never visits candidat
 ```powershell
 wxcli --json discovery search "2027 校园招聘" --hydrate
 wxcli --json discovery search "2027 校园招聘" --hydrate --browser
+```
+
+Media analysis is independently off by default. It can be enabled only by the local CLI after
+Hydration is enabled; Candidate input cannot enable it or choose its limits:
+
+```powershell
+wxcli --json discovery search "2027 校园招聘" --hydrate --analyze-media
+wxcli --json discovery hydrate --input candidates.json --analyze-media
 ```
 
 Single-article evidence uses a separate command so the existing `article get` contract remains unchanged:
