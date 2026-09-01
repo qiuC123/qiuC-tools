@@ -139,7 +139,9 @@ An inert decoded payload and type observation from an eligible image. WeChat OA 
 _Avoid_: application link, verified destination, QR action
 
 **OCR Evidence**:
-Locally derived text with image origin, engine identity, language, and confidence metadata. It never merges into the Article body or becomes a WeChat source fact.
+Locally derived raw text with image origin, engine identity, language, confidence where available,
+and selected deterministic preprocessing metadata. It never merges into the Article body, silently
+spell-corrects the engine output, or becomes a WeChat source fact.
 _Avoid_: Article text, cloud OCR result, corrected source
 
 **Media Analyzer**:

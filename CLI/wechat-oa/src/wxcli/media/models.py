@@ -192,6 +192,7 @@ class OCREvidence(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     text: str | None = None
     truncated: bool = False
+    preprocessing: tuple[str, ...] = Field(default_factory=tuple, max_length=10)
 
     @field_validator("text", mode="before")
     @classmethod
@@ -207,13 +208,25 @@ class OCREvidence(BaseModel):
 
     @model_validator(mode="after")
     def validate_outcome(self) -> OCREvidence:
+        if any(
+            not value
+            or len(value) > 64
+            or any(unicodedata.category(character) == "Cc" for character in value)
+            for value in self.preprocessing
+        ):
+            raise ValueError("OCR preprocessing steps must be bounded printable strings.")
         if self.status == OCRStatus.ANALYZED:
             if self.text is None:
                 raise ValueError("Analyzed OCR Evidence requires text, including an empty string.")
             if len(self.text) > MAX_OCR_CHARACTERS_PER_IMAGE:
                 raise ValueError("OCR text exceeds the per-image character limit.")
             return self
-        if self.text is not None or self.confidence is not None or self.truncated:
+        if (
+            self.text is not None
+            or self.confidence is not None
+            or self.truncated
+            or self.preprocessing
+        ):
             raise ValueError("Unavailable or failed OCR Evidence cannot contain derived text.")
         return self
 

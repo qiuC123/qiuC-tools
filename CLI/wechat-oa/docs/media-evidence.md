@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, article-level acquisition orchestration, and packaged local standard-QR analyzer are implemented; analysis orchestration, derived-result caching, OCR, CLI integration, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence data models, standalone safe image downloader, original-byte Media Cache, article-level acquisition orchestration, packaged local standard-QR analyzer, and replaceable Windows local-OCR provider are implemented; analysis orchestration, derived-result caching, CLI integration, and Evidence Bundles are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -55,7 +55,8 @@ second network request.
 
 The acquisition layer is an internal primitive and is not yet connected to Article Evidence,
 Media Evidence analysis, or a CLI control. Therefore the existing 0.5.1 commands still perform no
-media downloads. Derived QR/OCR result caching remains deferred until those analyzers exist.
+media downloads. Derived QR/OCR result caching and the analysis orchestration that invokes both
+analyzers remain deferred.
 
 ## Goal and non-goals
 
@@ -183,9 +184,31 @@ The complete payload appears only in explicitly requested machine JSON or an Evi
 
 OCR runs locally through a replaceable provider and records engine name, engine version, requested/detected language where available, confidence where supported, source image identity, and extracted text. The first 0.6.0 provider uses Windows local OCR and already installed language data. The provider receives only the bounded local image bytes.
 
+The implemented `WindowsOCRProvider` depends only on the `OCRRuntime` boundary. Its default runtime
+starts the fixed, embedded Windows PowerShell bridge without a visible window and calls
+`Windows.Media.Ocr`; it sends only paths to short-lived local PNG tiles through structured stdin.
+The bridge performs no HTTP request, loads no caller script, and transfers its UTF-8 result as
+Base64-wrapped JSON to avoid Windows console-codepage corruption. Temporary tiles are deleted when
+each attempt ends. Missing PowerShell, Windows OCR, or requested language data produces
+`unavailable`; malformed/tampered media and engine failures produce `failed` without diagnostic or
+partial text leakage.
+
+Input bytes, SHA-256, byte length, dimensions, and the 40-million-pixel cap are revalidated before
+OCR. Images wider than 2,400 pixels are proportionally reduced; images taller than 2,200 pixels are
+processed as at most 64 ordered tiles with 120 pixels of overlap, and exact duplicated overlap
+lines are removed. An initial result with fewer than four non-whitespace characters may receive one
+deterministic retry using bounded enlargement, grayscale, and automatic contrast. The longer raw
+observation wins; at most two attempts run, each Windows process has a 30-second limit, and the
+selected preprocessing steps are recorded in OCR Evidence. A failed retry never discards a
+successful first observation.
+
 The deterministic default OCR language is Simplified Chinese, `zh-Hans`. A caller may change it through `--ocr-language` or a trusted Direct Discovery Request schema v2. Candidate Batch data cannot choose it. If the requested Windows language capability is absent, the result is `ocr_unavailable`; wxcli does not silently substitute the operating-system display language or another OCR engine.
 
-wxcli performs only deterministic line-ending normalization, Unicode normalization, and terminal-control-character removal. It never spell-corrects, rewrites, translates, infers company names, guesses dates, or otherwise presents modified OCR as engine output. Normalized OCR text is limited to 50,000 characters per image and 1,000,000 characters per batch; a bounded result records `truncated: true`.
+wxcli performs only deterministic line-ending normalization, Unicode normalization,
+terminal-control-character removal, and exact overlap-line deduplication for long-image tiles. It
+never spell-corrects, rewrites, translates, infers company names, guesses dates, or otherwise
+presents modified OCR as engine output. Normalized OCR text is limited to 50,000 characters per
+image and 1,000,000 characters per batch; a bounded result records `truncated: true`.
 
 If no supported local OCR engine or language data is available, the image records `ocr_unavailable`. QR decoding, Article Evidence, and other images continue. wxcli never silently switches to a remote OCR API and never uploads the image for analysis.
 
