@@ -10,7 +10,15 @@ from typer.testing import CliRunner
 from wxcli import cli
 from wxcli.cli import app
 from wxcli.evidence import AccountIdentityEvidence, ArticleEvidence, IdentityStatus
-from wxcli.media import ArticleMediaDownloads, build_media_evidence
+from wxcli.media import (
+    ArticleMediaDownloads,
+    ImageDecoderCapabilities,
+    MediaDoctorReport,
+    OCRCapabilityAvailability,
+    StandardQRCapability,
+    WindowsOCRCapability,
+    build_media_evidence,
+)
 from wxcli.models import Article, Provider
 
 
@@ -55,12 +63,84 @@ def test_default_media_cache_is_namespaced_under_runtime_root(
     assert cache.directory == tmp_path / "wxcli" / "media-cache"
 
 
-def test_media_help_exposes_only_cache_maintenance() -> None:
+def test_media_help_exposes_doctor_and_cache_but_no_analysis_subcommand() -> None:
     result = CliRunner().invoke(app, ["media", "--help"])
 
     assert result.exit_code == 0
-    assert "cache" in result.stdout
-    assert "analyze" not in result.stdout
+    help_text = strip_ansi(result.stdout)
+    assert "cache" in help_text
+    assert "doctor" in help_text
+    assert "analyze" not in help_text
+
+
+class FakeMediaDoctor:
+    def __init__(self, report: MediaDoctorReport) -> None:
+        self.report = report
+        self.calls = 0
+
+    def run(self) -> MediaDoctorReport:
+        self.calls += 1
+        return self.report
+
+
+def media_doctor_report(*, required_ready: bool = True) -> MediaDoctorReport:
+    return MediaDoctorReport(
+        overall="pass" if required_ready else "fail",
+        image_decoders=ImageDecoderCapabilities(
+            jpeg=True,
+            png=True,
+            webp=required_ready,
+            gif=True,
+        ),
+        standard_qr=StandardQRCapability(available=True),
+        windows_ocr=WindowsOCRCapability(
+            availability=OCRCapabilityAvailability.UNAVAILABLE
+        ),
+    )
+
+
+def test_media_doctor_is_offline_and_does_not_touch_other_runtime_state(monkeypatch) -> None:
+    doctor = FakeMediaDoctor(media_doctor_report())
+    monkeypatch.setattr(cli, "default_media_doctor", lambda: doctor)
+    for dependency in (
+        "default_cache",
+        "default_media_cache",
+        "default_discovery_store",
+        "default_auth_stores",
+        "default_browser_profile",
+    ):
+        monkeypatch.setattr(
+            cli,
+            dependency,
+            lambda: (_ for _ in ()).throw(
+                AssertionError("Media Doctor must remain isolated")
+            ),
+        )
+
+    result = CliRunner().invoke(app, ["--json", "media", "doctor"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["schema_version"] == "1"
+    assert payload["data"]["overall"] == "pass"
+    assert payload["data"]["windows_ocr"]["availability"] == "unavailable"
+    assert doctor.calls == 1
+
+
+def test_media_doctor_uses_nonzero_exit_when_required_capability_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        cli,
+        "default_media_doctor",
+        lambda: FakeMediaDoctor(media_doctor_report(required_ready=False)),
+    )
+
+    result = CliRunner().invoke(app, ["--json", "media", "doctor"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["overall"] == "fail"
 
 
 def article_evidence(*, with_image: bool = True) -> ArticleEvidence:

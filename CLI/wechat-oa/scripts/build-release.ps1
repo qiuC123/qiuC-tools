@@ -225,6 +225,17 @@ $browserPolicyStatus = ConvertFrom-SingleJson (
 if (-not $browserPolicyStatus.ok -or $browserPolicyStatus.data.policy -ne 'never') {
     throw 'Packaged wxcli browser policy smoke test failed.'
 }
+$mediaDoctor = ConvertFrom-SingleJson (
+    Invoke-PackagedWxcli @('--json', 'media', 'doctor') @(0, 1)
+)
+if (
+    -not $mediaDoctor.ok -or
+    $mediaDoctor.data.overall -ne 'pass' -or
+    -not $mediaDoctor.data.standard_qr.available -or
+    $mediaDoctor.data.windows_ocr.availability -notin @('available', 'unavailable', 'failed')
+) {
+    throw 'Packaged wxcli Media Doctor smoke test failed.'
+}
 $doctor = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'doctor') @(0, 1))
 $liveChecks = @($doctor.data.checks | Where-Object { $_.name -in @('network', 'stable_token', 'ip_allowlist', 'draft_permission', 'published_permission') })
 if (-not $doctor.ok -or @($liveChecks | Where-Object { $_.status -ne 'skip' }).Count -gt 0) {

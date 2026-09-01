@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import unicodedata
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Protocol, cast
@@ -69,6 +70,14 @@ class OCRUnavailableError(RuntimeError):
 
 class OCRExecutionError(RuntimeError):
     """The local OCR engine failed without exposing internal diagnostics."""
+
+
+@dataclass(frozen=True, slots=True)
+class OCRRuntimeCapabilities:
+    """Bounded local Windows OCR languages observed by an offline capability probe."""
+
+    languages: tuple[str, ...]
+    default_language_available: bool
 
 
 RunCommand = Callable[..., subprocess.CompletedProcess[str]]
@@ -131,6 +140,82 @@ class WindowsPowerShellOCRRuntime:
         if not all(isinstance(value, str) for value in texts):
             raise OCRExecutionError("Windows local OCR returned non-text output.")
         return tuple(cast(list[str], texts))
+
+    def capabilities(
+        self,
+        *,
+        default_language: str = "zh-Hans",
+    ) -> OCRRuntimeCapabilities:
+        """Query installed Windows OCR languages without reading images or using the network."""
+        if not default_language or len(default_language) > 64:
+            raise ValueError("default_language must contain between 1 and 64 characters.")
+        if not self._powershell_path or os.name != "nt":
+            raise OCRUnavailableError("Windows local OCR is unavailable.")
+        assert self._powershell_path is not None
+        encoded_script = base64.b64encode(
+            _WINDOWS_OCR_CAPABILITY_SCRIPT.encode("utf-16-le")
+        ).decode("ascii")
+        command = [
+            self._powershell_path,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            encoded_script,
+        ]
+        try:
+            completed = self._run_command(
+                command,
+                input=json.dumps(
+                    {"defaultLanguage": default_language},
+                    ensure_ascii=False,
+                ),
+                capture_output=True,
+                check=False,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self._timeout_seconds,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise OCRExecutionError("Windows local OCR capability probe failed.") from error
+        try:
+            response_bytes = base64.b64decode(completed.stdout.strip(), validate=True)
+            response = json.loads(response_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, TypeError) as error:
+            raise OCRExecutionError(
+                "Windows local OCR capability probe returned an invalid response."
+            ) from error
+        if not isinstance(response, dict):
+            raise OCRExecutionError(
+                "Windows local OCR capability probe returned an invalid response."
+            )
+        if completed.returncode == 3 or response.get("available") is False:
+            raise OCRUnavailableError("Windows local OCR is unavailable.")
+        if completed.returncode != 0 or response.get("ok") is not True:
+            raise OCRExecutionError("Windows local OCR capability probe failed.")
+        languages = response.get("languages")
+        default_available = response.get("defaultLanguageAvailable")
+        if (
+            not isinstance(languages, list)
+            or len(languages) > 100
+            or not all(
+                isinstance(value, str)
+                and 1 <= len(value) <= 64
+                and not any(unicodedata.category(character) == "Cc" for character in value)
+                for value in languages
+            )
+            or not isinstance(default_available, bool)
+        ):
+            raise OCRExecutionError(
+                "Windows local OCR capability probe returned invalid languages."
+            )
+        stable_languages = tuple(sorted(set(cast(list[str], languages)), key=str.casefold))
+        return OCRRuntimeCapabilities(
+            languages=stable_languages,
+            default_language_available=default_available,
+        )
 
     def _invoke(
         self,
@@ -452,4 +537,42 @@ $texts = foreach ($item in $items) {
     }
 }
 Write-Response @{available = $true; ok = $true; texts = @($texts)}
+"""
+
+
+_WINDOWS_OCR_CAPABILITY_SCRIPT = r"""
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+function Write-Response {
+    param($Value)
+    $json = ConvertTo-Json -InputObject $Value -Depth 3 -Compress
+    [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json))
+}
+try {
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    $null = [Windows.Globalization.Language, Windows.Foundation, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+    $request = [Console]::In.ReadToEnd().TrimStart([char]0xFEFF) | ConvertFrom-Json
+    $languages = @(
+        [Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages |
+            ForEach-Object { [string]$_.LanguageTag } |
+            Sort-Object -Unique |
+            Select-Object -First 100
+    )
+    $requested = [Windows.Globalization.Language]::new([string]$request.defaultLanguage)
+    $defaultEngine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($requested)
+    Write-Response @{
+        available = $true
+        ok = $true
+        languages = @($languages)
+        defaultLanguageAvailable = ($null -ne $defaultEngine)
+    }
+    exit 0
+}
+catch {
+    Write-Response @{available = $false; ok = $false}
+    exit 3
+}
 """

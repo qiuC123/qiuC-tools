@@ -116,6 +116,9 @@ wechat-oa cache clear
 # 只清除独立的公开图片 Media Cache
 wechat-oa media cache clear
 
+# 纯本地检查图片解码、标准二维码和 Windows OCR/语言能力
+wechat-oa --json media doctor
+
 # 交互式录入官方接口凭证，以及只报告“是否存在”的状态
 wechat-oa auth configure
 wechat-oa auth status
@@ -161,7 +164,7 @@ wechat-oa doctor --allow-live-api
 - 默认最多返回 50 个候选。启用回读后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
 - `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
 - `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
-- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。开发版 0.6.0 已实现 Media Evidence、安全图片下载与缓存、本地标准二维码、可替换 Windows OCR、SHA-256 去重编排，以及单篇 `article get/evidence --analyze-media` 显式控制；默认命令输出完全不变。发现批次媒体控制、派生结果缓存、能力 Doctor 和 Evidence Bundle 仍未实现。正式发布的 0.5.1 尚不包含这些媒体分析能力。
+- wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。开发版 0.6.0 已实现 Media Evidence、安全图片下载与缓存、本地标准二维码、可替换 Windows OCR、SHA-256 去重编排、单篇 `article get/evidence --analyze-media` 显式控制和纯本地 `media doctor`；默认文章命令输出完全不变。发现批次媒体控制、派生结果缓存和 Evidence Bundle 仍未实现。正式发布的 0.5.1 尚不包含这些媒体分析能力。
 - 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
 
 完整 schema、部分成功语义和验收口径见 [文章发现说明](docs/article-discovery.md)。
@@ -238,6 +241,12 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 - 网络、stable token、IP 白名单、草稿权限和已发布权限（默认全部跳过）
 
 只要出现 `fail`，doctor 总结果就是失败；`warn` 用于提示但不会单独令总结果失败。
+
+`wechat-oa --json media doctor` 是独立的纯本地媒体能力检查。它对 JPEG、PNG、WebP、
+GIF 解码和标准二维码执行打包自检，并查询 Windows 已安装的 OCR 语言；不会联网、
+读取凭据、启动 Chrome、安装语言包或修改缓存。图片解码器或二维码缺失会令进程使用
+非零退出码；Windows OCR 是可选能力，`unavailable` 或 `failed` 会被如实报告，但不会
+阻止基本媒体分析启动。
 
 ## Windows 打包
 

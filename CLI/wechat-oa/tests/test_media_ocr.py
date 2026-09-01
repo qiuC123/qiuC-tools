@@ -16,6 +16,7 @@ from wxcli.media import (
     DownloadedMedia,
     MediaFormat,
     OCRExecutionError,
+    OCRRuntimeCapabilities,
     OCRStatus,
     OCRUnavailableError,
     WindowsOCRProvider,
@@ -260,6 +261,84 @@ def test_runtime_bridge_maps_missing_language_and_invalid_output(
     )
     with pytest.raises(OCRExecutionError):
         broken.recognize([Image.new("RGB", (20, 20))], language="zh-Hans")
+
+
+def test_runtime_capability_probe_is_bounded_local_and_stably_orders_languages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("wxcli.media.ocr.os.name", "nt")
+    observation: dict[str, object] = {}
+
+    def run_command(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observation["request"] = json.loads(str(kwargs["input"]))
+        encoded = command[command.index("-EncodedCommand") + 1]
+        observation["script"] = base64.b64decode(encoded).decode("utf-16-le")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=base64.b64encode(
+                json.dumps(
+                    {
+                        "available": True,
+                        "ok": True,
+                        "languages": ["zh-Hans-CN", "en-US", "en-US"],
+                        "defaultLanguageAvailable": True,
+                    }
+                ).encode()
+            ).decode(),
+            stderr="",
+        )
+
+    runtime = WindowsPowerShellOCRRuntime(
+        powershell_path="powershell.exe",
+        run_command=run_command,
+    )
+
+    result = runtime.capabilities(default_language="zh-Hans")
+
+    assert result == OCRRuntimeCapabilities(
+        languages=("en-US", "zh-Hans-CN"),
+        default_language_available=True,
+    )
+    assert observation["request"] == {"defaultLanguage": "zh-Hans"}
+    assert "AvailableRecognizerLanguages" in str(observation["script"])
+    assert "http" not in str(observation["script"]).casefold()
+
+
+def test_runtime_capability_probe_maps_unavailable_and_invalid_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("wxcli.media.ocr.os.name", "nt")
+
+    def unavailable(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            3,
+            stdout=base64.b64encode(b'{"available":false,"ok":false}').decode(),
+            stderr="",
+        )
+
+    runtime = WindowsPowerShellOCRRuntime(
+        powershell_path="powershell.exe",
+        run_command=unavailable,
+    )
+    with pytest.raises(OCRUnavailableError):
+        runtime.capabilities()
+
+    def invalid(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=base64.b64encode(b'[]').decode(),
+            stderr="",
+        )
+
+    broken = WindowsPowerShellOCRRuntime(
+        powershell_path="powershell.exe",
+        run_command=invalid,
+    )
+    with pytest.raises(OCRExecutionError):
+        broken.capabilities()
 
 
 def test_configuration_can_only_tighten_hard_limits() -> None:
