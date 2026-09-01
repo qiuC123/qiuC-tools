@@ -74,6 +74,7 @@ wechat-oa --json media doctor
 ```powershell
 wechat-oa --json browser status
 wechat-oa --json browser login
+wechat-oa --json browser verify "ARTICLE_URL"
 wechat-oa --json browser clear
 wechat-oa --json browser policy status
 wechat-oa browser policy set auto-fallback
@@ -84,6 +85,11 @@ wechat-oa browser policy set never
   产生的 `last_successful_read_at`；这些本地事实不证明远端会话当前有效。
 - `login` 打开 wechat-oa 独立、可见、持久的 Chrome profile，供用户手工登录或
   验证；窗口正常结束不等于文章已经成功读取。
+- `verify` 只接受严格的公众号文章 URL，在专用可见 profile 中打开这篇文章并最多等待
+  5 分钟。用户手工完成验证后，它直接返回 Article Evidence；不会点击、绕过验证或
+  导出 Cookie。自动 fallback 遇到挑战时会立即退出，不能声称窗口仍在等待。
+- Agent 不得使用 computer-use、窗口激活或通用浏览器自动化接管验证窗口；若用户没有
+  明确授权 `browser verify`，只报告 `VERIFICATION_REQUIRED` 并停止。
 - `clear` 删除该独立 profile 和本地状态记录。它是破坏性本地操作，必须获得
   用户明确请求。
 - profile 有跨进程锁；被占用时不要并发启动第二个 wechat-oa Chrome。

@@ -64,6 +64,18 @@ evidence and never open them automatically.
    wechat-oa --json article get "URL" --browser-fallback
    ```
 
+   Automatic fallback never waits for a person. If it returns browser-stage
+   `VERIFICATION_REQUIRED`, request separate explicit authorization, then run:
+
+   ```powershell
+   wechat-oa --json browser verify "URL"
+   ```
+
+   This command keeps that exact Article visible for up to five minutes while
+   the user completes the challenge, then returns Article Evidence. Never use
+   computer-use, window activation, clicks, or another browser automation tool
+   to operate or locate the verification page.
+
 7. Return `content_markdown` as article text and `images[]` as image URLs. A
    terminal does not render Markdown images; do not claim images are missing
    merely because they appear as `![](https://...)` text.
@@ -91,6 +103,8 @@ evidence and never open them automatically.
   stdout, logs, JSON, files, or Git.
 - Never solve or bypass a CAPTCHA. Ask the user to complete verification in the
   visible wechat-oa Chrome profile.
+- Never use computer-use or generic browser control on the wechat-oa verification
+  window. Only `browser verify URL` owns the explicit interactive Article flow.
 - Do not run `auth configure`, `discovery auth configure`, `auth test
   --allow-live-api`, `doctor --allow-live-api`, `browser clear`, `cache clear`,
   `discovery cache clear`, or `media cache clear` unless the user explicitly

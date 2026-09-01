@@ -106,6 +106,7 @@ wechat-oa article get "https://mp.weixin.qq.com/s/example" --no-browser
 
 # 管理浏览器专用资料目录；status 绝不会启动 Chrome
 wechat-oa browser login
+wechat-oa --json browser verify "https://mp.weixin.qq.com/s/example"
 wechat-oa browser status
 wechat-oa browser clear
 
@@ -157,7 +158,7 @@ wechat-oa doctor
 wechat-oa doctor --allow-live-api
 ```
 
-`browser status` 只报告本地专用 profile、旧版迁移的 `legacy_last_verified_at` 和真实文章成功回读产生的 `last_successful_read_at`。`browser login` 正常结束只代表可见窗口流程完成，不证明远端会话有效。状态命令绝不会打开 Chrome。
+`browser status` 只报告本地专用 profile、旧版迁移的 `legacy_last_verified_at` 和真实文章成功读取产生的 `last_successful_read_at`。`browser login` 正常结束只代表可见窗口流程完成，不证明远端会话有效。`browser verify URL` 会在专用可见 Chrome 中打开这一篇严格公众号文章，最多等待 5 分钟让用户手工完成验证，随后直接返回 Article Evidence；它不会点击或绕过挑战。状态命令绝不会打开 Chrome。
 
 ## 微信文章发现与证据
 
@@ -182,7 +183,7 @@ https://mp.weixin.qq.com/s/<token>
 https://mp.weixin.qq.com/s?__biz=...&mid=...
 ```
 
-遇到验证页时，未授权浏览器的非交互环境会立即返回 `VERIFICATION_REQUIRED`。获准自动回退时，一个批次最多启动一次可见 Chrome；如果 Chrome 中仍出现扫码、滑块或确认页，wechat-oa 会立即停止该 Browser Run，返回 `verification_stage: browser` 和 `required_action: run_browser_login`，不会等待或绕过验证。
+遇到验证页时，未授权浏览器的非交互环境会立即返回 `VERIFICATION_REQUIRED`。获准自动回退时，一个批次最多启动一次可见 Chrome；如果 Chrome 中仍出现扫码、滑块或确认页，wechat-oa 会立即停止该 Browser Run，返回 `verification_stage: browser` 和 `required_action: run_browser_login`，不会等待或绕过验证。此时在用户再次明确授权后使用 `wechat-oa --json browser verify "URL"`；调用 Agent 不得用 computer-use、窗口激活或通用浏览器控制接管验证码窗口。
 
 ## JSON、标准输出与退出码
 

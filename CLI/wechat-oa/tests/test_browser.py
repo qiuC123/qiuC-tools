@@ -8,14 +8,18 @@ import json
 import pytest
 import httpx
 from playwright.sync_api import Error as PlaywrightError
+from typer.testing import CliRunner
 
 import wxcli.browser as browser_module
+import wxcli.cli as cli_module
 from wxcli.browser import BrowserProfile, ProfileLock
 from wxcli.cache import ArticleCache
+from wxcli.cli import app
 from wxcli.errors import ErrorCode, WxcliError
 from wxcli.models import Provider
 from wxcli.providers.chrome import ChromeProvider
 from wxcli.providers.http import PublicHttpProvider
+from wxcli.public_article import PublicArticleParser
 
 
 class FakePage:
@@ -292,6 +296,163 @@ def test_browser_login_does_not_claim_a_successful_article_read(tmp_path: Path) 
     provider.open_login()
 
     assert profile.status().last_successful_read_at is None
+
+
+def test_browser_verify_cli_returns_evidence_from_interactive_article(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[tuple[str, bool]] = []
+    document = PublicArticleParser.parse(
+        '<h1 id="activity-name">Verified</h1><div id="js_content">正文</div>',
+        "https://mp.weixin.qq.com/s/T1",
+        Provider.CHROME,
+    )
+
+    class FakeChromeProvider:
+        def __init__(self, *_: object, **__: object) -> None: pass
+        def get_document_interactive(
+            self,
+            url: str,
+            *,
+            no_cache: bool = False,
+        ):
+            observed.append((url, no_cache))
+            return document
+
+    monkeypatch.setattr(cli_module, "ChromeProvider", FakeChromeProvider)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "browser",
+            "verify",
+            "https://mp.weixin.qq.com/s/T1",
+            "--no-cache",
+        ],
+    )
+
+    payload = json.loads(result.stdout)
+    assert result.exit_code == 0
+    assert payload["ok"] is True
+    assert payload["data"]["article"]["title"] == "Verified"
+    assert payload["data"]["article"]["provider"] == "chrome"
+    assert observed == [("https://mp.weixin.qq.com/s/T1", True)]
+
+
+def test_browser_help_exposes_explicit_verify_command() -> None:
+    result = CliRunner().invoke(app, ["browser", "--help"])
+
+    assert result.exit_code == 0
+    assert "verify" in result.stdout
+
+
+def test_interactive_verification_waits_for_exact_article_and_returns_document(
+    tmp_path: Path,
+) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+    page = FakePage()
+    snapshots = iter(
+        [
+            "<p>请完成安全验证</p>",
+            '<h1 id="activity-name">Verified</h1><div id="js_content">正文</div>',
+            '<h1 id="activity-name">Verified</h1><div id="js_content">正文</div>',
+        ]
+    )
+    observed_waits: list[int] = []
+
+    page.content = lambda: next(snapshots)  # type: ignore[method-assign]
+    page.wait_for_timeout = observed_waits.append  # type: ignore[method-assign]
+
+    class InteractiveContext(FakeContext):
+        def new_page(self) -> FakePage: return page
+
+    class InteractiveChromium:
+        def launch_persistent_context(self, **_: object) -> InteractiveContext:
+            return InteractiveContext()
+
+    class InteractivePlaywright(FakePlaywright):
+        chromium = InteractiveChromium()
+
+    profile = BrowserProfile(tmp_path / "profile", tmp_path / "state.json")
+    provider = ChromeProvider(
+        profile,
+        playwright_factory=InteractivePlaywright,
+        chrome_path=chrome,
+    )
+
+    document = provider.get_document_interactive("https://mp.weixin.qq.com/s/T1")
+
+    assert document.article.title == "Verified"
+    assert observed_waits == [500]
+    assert profile.status().last_successful_read_at is not None
+
+
+def test_interactive_verification_reports_closed_window(tmp_path: Path) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+
+    class ClosedPage(FakePage):
+        def content(self) -> str: return "<p>请完成安全验证</p>"
+        def is_closed(self) -> bool: return True
+
+    class ClosedContext(FakeContext):
+        def new_page(self) -> ClosedPage: return ClosedPage()
+
+    class ClosedChromium:
+        def launch_persistent_context(self, **_: object) -> ClosedContext:
+            return ClosedContext()
+
+    class ClosedPlaywright(FakePlaywright):
+        chromium = ClosedChromium()
+
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=ClosedPlaywright,
+        chrome_path=chrome,
+    )
+
+    with pytest.raises(WxcliError) as raised:
+        provider.get_document_interactive("https://mp.weixin.qq.com/s/T1")
+
+    assert raised.value.code is ErrorCode.VERIFICATION_REQUIRED
+    assert raised.value.details["verification_outcome"] == "window_closed"
+
+
+def test_interactive_verification_has_a_hard_deadline(tmp_path: Path) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+
+    class VerificationPage(FakePage):
+        def content(self) -> str: return "<p>请完成安全验证</p>"
+
+    class VerificationContext(FakeContext):
+        def new_page(self) -> VerificationPage: return VerificationPage()
+
+    class VerificationChromium:
+        def launch_persistent_context(self, **_: object) -> VerificationContext:
+            return VerificationContext()
+
+    class VerificationPlaywright(FakePlaywright):
+        chromium = VerificationChromium()
+
+    timestamps = iter([0.0, 0.0, 1.0])
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=VerificationPlaywright,
+        chrome_path=chrome,
+        monotonic=lambda: next(timestamps),
+    )
+
+    with pytest.raises(WxcliError) as raised:
+        provider.get_document_interactive(
+            "https://mp.weixin.qq.com/s/T1",
+            timeout_seconds=0.5,
+        )
+
+    assert raised.value.code is ErrorCode.VERIFICATION_REQUIRED
+    assert raised.value.details["verification_outcome"] == "timeout"
 
 
 def test_browser_clear_removes_session_state_only(tmp_path: Path) -> None:

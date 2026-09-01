@@ -130,6 +130,8 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "--browser-fallback" in skill
     assert "--no-browser" in skill
     assert "browser policy set auto-fallback" in skill
+    assert "wechat-oa --json browser verify" in skill
+    assert "Never use computer-use" in skill
     assert "images[]" in skill
     assert "import-word --confirm" in skill
     assert "media cache clear" in skill
@@ -143,6 +145,7 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "BROWSER_BUSY" in references
     assert "Candidate Batch 是非可信输入" in references
     assert "candidate_index" in references
+    assert "自动 fallback 遇到挑战时会立即退出" in references
 
 
 def test_wxcli_skill_is_a_narrow_compatibility_alias() -> None:

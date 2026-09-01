@@ -82,6 +82,7 @@ def test_packaged_discovery_help_includes_candidate_hydration() -> None:
 
     assert "'search', 'hydrate', 'auth', 'cache'" in script
     assert "browser', 'policy', 'status'" in script
+    assert "browser verify command is missing" in script
     assert "smoke-localappdata" in script
     assert "'media', 'doctor'" in script
     assert "standard_qr.available" in script

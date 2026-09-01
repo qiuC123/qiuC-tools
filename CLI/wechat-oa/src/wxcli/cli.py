@@ -30,7 +30,7 @@ from wxcli.draft_import import WordDraftImporter
 from wxcli.draft_import import PreparedDraft
 from wxcli.draft_update import DraftUpdatePlanner
 from wxcli.errors import ErrorCode, ExitCode, InputError, ValidationError, WxcliError
-from wxcli.evidence import ArticleEvidence, EvidenceService
+from wxcli.evidence import ArticleEvidence, EvidenceService, build_article_evidence
 from wxcli.discovery.auth import DiscoverySecretStore
 from wxcli.discovery.brave import BraveDiscoveryProvider
 from wxcli.discovery.ingestion import CandidateIngestionService
@@ -676,6 +676,27 @@ def browser_login(context: typer.Context) -> None:
     output.diagnostic("Chrome is opening with the WeChat OA-only profile.")
     ChromeProvider(default_browser_profile()).open_login()
     output.success({"opened": True, "session_validity": "not_verified"})
+
+
+@browser_app.command("verify")
+def browser_verify(
+    context: typer.Context,
+    url: str = typer.Argument(..., help="Supported public WeChat article URL to verify."),
+    no_cache: bool = typer.Option(
+        False,
+        "--no-cache",
+        help="Do not write the successfully verified Article to cache.",
+    ),
+) -> None:
+    """Keep one exact Article visible for explicit manual verification."""
+    output = _output(context)
+    output.diagnostic(
+        "Chrome is opening the requested Article for manual verification; "
+        "wechat-oa will not click or bypass the challenge."
+    )
+    provider = ChromeProvider(default_browser_profile(), cache=default_cache())
+    document = provider.get_document_interactive(url, no_cache=no_cache)
+    output.success(build_article_evidence(document, []))
 
 
 @browser_app.command("status")

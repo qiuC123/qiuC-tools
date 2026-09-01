@@ -136,6 +136,7 @@ The Browser Run remains serial and may visit only the already validated strict P
 - The Browser Run may use only the time remaining under the ten-minute total deadline, even when that is less than five minutes.
 - Automatic fallback never waits for a person inside that five-minute budget.
 - `browser login` remains the separate explicit workflow and allows up to five minutes for manual session initialization or refresh.
+- `browser verify ARTICLE_URL` is the explicit Article-specific workflow. It keeps only that strict Public URL visible for up to five minutes, observes page classification without clicking, and returns Article Evidence when the user makes the Article readable.
 - Successful Evidence remains available when later candidates time out.
 - Timed-out and unattempted candidates receive safe per-candidate outcomes; batch output remains partial rather than discarding completed Evidence.
 
@@ -157,7 +158,7 @@ HTTP that requires an authorized browser remains `verification_status: verificat
 
 A failed single-Article command preserves the existing `VERIFICATION_REQUIRED` error family and exit code 6, adding optional safe fields that identify the browser stage and required action. Schema-v1 consumers continue to see the existing verification status; no new required enum value is introduced. Batch commands record the outcome in a Hydration Attempt, stop the unusable Browser Run, and preserve all HTTP and completed Evidence results.
 
-wxcli never solves a CAPTCHA, clicks through a human confirmation, waits indefinitely, or changes `browser policy` as a side effect. The user refreshes the session separately through `wxcli browser login`.
+wxcli never solves a CAPTCHA, clicks through a human confirmation, waits indefinitely, or changes `browser policy` as a side effect. Generic session initialization remains available through `wxcli browser login`; when the exact challenged Article URL is known, a separately authorized `wxcli --json browser verify "URL"` keeps that Article visible and returns its evidence after manual verification. Calling agents must not use computer-use, window activation, or generic browser automation to take over this window.
 
 ## Result transparency
 
