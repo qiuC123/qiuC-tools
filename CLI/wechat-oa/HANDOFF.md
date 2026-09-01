@@ -33,7 +33,7 @@
 - `main` 的 PR #6 已修复 Chrome 在 `domcontentloaded` 后立即截图、静态解析器只识别 `<img>` 导致正文海报漏检的问题；真实文章复验从 4 个页尾图片 URL 提升到 33 个正文/页尾图片 URL，33 张图片全部通过安全下载器下载，Windows 本地 OCR 对 20 张产生非空文本且无引擎失败，真实图片和文字未写入 Git。
 - PR #7 已合并可替换的 `OCRProvider`/`OCRRuntime` 与默认 `WindowsOCRProvider`：重新校验图片字节/哈希/尺寸/像素，最多 64 个重叠长图切片，稀疏结果最多一次受限放大、灰度和自动对比度重试，每次 Windows 进程限时 30 秒；不联网、不纠错，选择的预处理步骤进入 OCR Evidence。固定 PowerShell 桥接使用短期 PNG 和结构化 stdin，Base64 包装 UTF-8 JSON 防止控制台编码损坏，缺少引擎/语言与执行失败保持独立状态。合并前本地完整验证为 344 项 pytest 全绿，mypy 检查 43 个源文件无错误；真实本机合成中文图片字符码核对通过，PyInstaller 双命令发布包及离线冒烟通过。
 - PR #8 已合并 QR/OCR 分析编排：对下载结果做防御性复验，相同图片字节按 SHA-256 只分析一次并映射回每个文章图片位置；QR 与 OCR 失败互相隔离，错误哈希/语言关联被替换为稳定失败证据；调用方降低后的图片、QR、OCR 和文章限额由编排层再次强制执行；下载省略数进入 Media Evidence、摘要和稳定哈希。合并前本地完整验证为 356 项 pytest 全绿，mypy 检查 44 个源文件无错误；PyInstaller 与远端 Windows 包冒烟通过。
-- 当前分支为 `article get` 和 `article evidence` 增加默认关闭的 `--analyze-media`。显式启用后先生成 Article Evidence，再安全下载图片并返回外层 schema v2；不开启时不构造 Media Cache、下载器或分析器，原输出不变。媒体模式下的 `--no-cache` 同时禁用文章和图片缓存。发现批次媒体控制、能力 Doctor、派生结果缓存和 Evidence Bundle 仍未实现。
+- 当前分支为 `article get` 和 `article evidence` 增加默认关闭的 `--analyze-media`。显式启用后先生成 Article Evidence，再安全下载图片并返回外层 schema v2；不开启时不构造 Media Cache、下载器或分析器，原输出不变。媒体模式下的 `--no-cache` 同时禁用文章和图片缓存。发现批次媒体控制、能力 Doctor、派生结果缓存和 Evidence Bundle 仍未实现。本地完整验证为 362 项 pytest 全绿，mypy 检查 44 个源文件无错误；仓库内 canonical Skill 通过官方校验；临时 PyInstaller onedir 构建、版本/JSON 启动及两个文章命令的新开关帮助冒烟通过。
 
 ### 下一步计划
 
