@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from wxcli import cli
@@ -249,5 +250,5 @@ def test_article_media_flag_is_explicitly_visible_on_get_and_evidence() -> None:
 
     assert get_help.exit_code == 0
     assert evidence_help.exit_code == 0
-    assert "--analyze-media" in get_help.stdout
-    assert "--analyze-media" in evidence_help.stdout
+    assert "--analyze-media" in strip_ansi(get_help.stdout)
+    assert "--analyze-media" in strip_ansi(evidence_help.stdout)
