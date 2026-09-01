@@ -27,6 +27,7 @@ MAX_IMAGE_PIXELS = 40_000_000
 MAX_QR_PAYLOADS_PER_IMAGE = 20
 MAX_QR_PAYLOAD_BYTES = 4 * 1024
 MAX_OCR_CHARACTERS_PER_IMAGE = 50_000
+MAX_OCR_CHARACTERS_PER_BATCH = 1_000_000
 
 
 class MediaItemStatus(StrEnum):
@@ -105,6 +106,11 @@ class MediaAnalysisLimits(BaseModel):
         default=MAX_OCR_CHARACTERS_PER_IMAGE,
         ge=1,
         le=MAX_OCR_CHARACTERS_PER_IMAGE,
+    )
+    max_ocr_characters_per_batch: int = Field(
+        default=MAX_OCR_CHARACTERS_PER_BATCH,
+        ge=1,
+        le=MAX_OCR_CHARACTERS_PER_BATCH,
     )
 
 
@@ -306,6 +312,7 @@ class MediaSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     total: int = Field(ge=0)
+    omitted: int = Field(default=0, ge=0)
     analyzed: int = Field(ge=0)
     skipped: int = Field(ge=0)
     failed: int = Field(ge=0)
@@ -329,6 +336,7 @@ class MediaEvidence(BaseModel):
     analysis_started_at: datetime
     analysis_finished_at: datetime
     partial: bool
+    omitted_count: int = Field(default=0, ge=0)
     summary: MediaSummary
     items: tuple[MediaItemEvidence, ...] = Field(max_length=MAX_ARTICLE_IMAGES)
     media_evidence_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -341,9 +349,9 @@ class MediaEvidence(BaseModel):
             raise ValueError("Media Evidence cannot finish before it starts.")
         if [item.index for item in self.items] != list(range(len(self.items))):
             raise ValueError("Media item indexes must be contiguous and ordered from zero.")
-        if self.summary != _summarize(self.items):
+        if self.summary != _summarize(self.items, omitted_count=self.omitted_count):
             raise ValueError("Media summary does not match item outcomes.")
-        if self.partial != _is_partial(self.items):
+        if self.partial != _is_partial(self.items, omitted_count=self.omitted_count):
             raise ValueError("Media partial flag does not match item outcomes.")
         if self.media_evidence_sha256 != _media_evidence_hash(self):
             raise ValueError("Media Evidence hash does not match its stable content.")
@@ -373,18 +381,20 @@ def build_media_evidence(
     analysis_started_at: datetime,
     analysis_finished_at: datetime,
     configuration: MediaAnalysisConfiguration | None = None,
+    omitted_count: int = 0,
 ) -> MediaEvidence:
     """Build a validated Media Evidence document and its stable fingerprint."""
     actual_configuration = configuration or MediaAnalysisConfiguration()
     immutable_items = tuple(items)
-    summary = _summarize(immutable_items)
-    partial = _is_partial(immutable_items)
+    summary = _summarize(immutable_items, omitted_count=omitted_count)
+    partial = _is_partial(immutable_items, omitted_count=omitted_count)
     payload = {
         "schema_version": MEDIA_EVIDENCE_SCHEMA_VERSION,
         "extractor_version": MEDIA_EVIDENCE_EXTRACTOR_VERSION,
         "source_content_sha256": source_content_sha256,
         "configuration": actual_configuration.model_dump(mode="json"),
         "partial": partial,
+        "omitted_count": omitted_count,
         "summary": summary.model_dump(mode="json"),
         "items": [_stable_item_payload(item) for item in immutable_items],
     }
@@ -394,17 +404,23 @@ def build_media_evidence(
         analysis_started_at=analysis_started_at,
         analysis_finished_at=analysis_finished_at,
         partial=partial,
+        omitted_count=omitted_count,
         summary=summary,
         items=immutable_items,
         media_evidence_sha256=_json_sha256(payload),
     )
 
 
-def _summarize(items: Sequence[MediaItemEvidence]) -> MediaSummary:
+def _summarize(
+    items: Sequence[MediaItemEvidence],
+    *,
+    omitted_count: int = 0,
+) -> MediaSummary:
     qr_statuses = [item.qr.status for item in items if item.qr is not None]
     ocr_statuses = [item.ocr.status for item in items if item.ocr is not None]
     return MediaSummary(
         total=len(items),
+        omitted=omitted_count,
         analyzed=sum(item.status == MediaItemStatus.ANALYZED for item in items),
         skipped=sum(item.status == MediaItemStatus.SKIPPED for item in items),
         failed=sum(item.status == MediaItemStatus.FAILED for item in items),
@@ -417,8 +433,12 @@ def _summarize(items: Sequence[MediaItemEvidence]) -> MediaSummary:
     )
 
 
-def _is_partial(items: Sequence[MediaItemEvidence]) -> bool:
-    return any(
+def _is_partial(
+    items: Sequence[MediaItemEvidence],
+    *,
+    omitted_count: int = 0,
+) -> bool:
+    return omitted_count > 0 or any(
         item.status != MediaItemStatus.ANALYZED
         or (item.qr is not None and item.qr.status == QRStatus.FAILED)
         or (item.ocr is not None and item.ocr.status != OCRStatus.ANALYZED)
@@ -438,6 +458,7 @@ def _media_evidence_hash(evidence: MediaEvidence) -> str:
             "source_content_sha256": evidence.source_content_sha256,
             "configuration": evidence.configuration.model_dump(mode="json"),
             "partial": evidence.partial,
+            "omitted_count": evidence.omitted_count,
             "summary": evidence.summary.model_dump(mode="json"),
             "items": [_stable_item_payload(item) for item in evidence.items],
         }

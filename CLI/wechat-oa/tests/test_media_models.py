@@ -91,6 +91,7 @@ def test_media_evidence_builds_stable_versioned_document() -> None:
     assert evidence.partial is False
     assert evidence.summary.model_dump() == {
         "total": 1,
+        "omitted": 0,
         "analyzed": 1,
         "skipped": 0,
         "failed": 0,
@@ -104,12 +105,33 @@ def test_media_evidence_builds_stable_versioned_document() -> None:
     assert len(evidence.media_evidence_sha256) == 64
 
 
+def test_omitted_occurrences_make_media_evidence_partial_and_affect_hash() -> None:
+    arguments = {
+        "source_content_sha256": digest("c"),
+        "items": [analyzed_item()],
+        "analysis_started_at": datetime(2026, 1, 1, tzinfo=UTC),
+        "analysis_finished_at": datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+    }
+
+    complete = build_media_evidence(**arguments)
+    omitted = build_media_evidence(**arguments, omitted_count=3)
+
+    assert omitted.partial is True
+    assert omitted.omitted_count == 3
+    assert omitted.summary.omitted == 3
+    assert omitted.media_evidence_sha256 != complete.media_evidence_sha256
+
+
 def test_media_limits_may_be_lowered_but_never_exceed_hard_caps() -> None:
     configuration = MediaAnalysisConfiguration(
-        limits=MediaAnalysisLimits(max_image_bytes=1024)
+        limits=MediaAnalysisLimits(
+            max_image_bytes=1024,
+            max_ocr_characters_per_batch=1234,
+        )
     )
 
     assert configuration.limits.max_image_bytes == 1024
+    assert configuration.limits.max_ocr_characters_per_batch == 1234
     with pytest.raises(ValidationError):
         MediaAnalysisLimits(max_image_bytes=10 * 1024 * 1024 + 1)
 
