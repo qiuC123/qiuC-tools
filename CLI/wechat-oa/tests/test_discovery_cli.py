@@ -140,6 +140,13 @@ def test_discovery_search_emits_one_json_document_without_constructing_chrome(mo
     monkeypatch.setattr(cli, "DiscoveryService", FakeDiscoveryService)
     monkeypatch.setattr(
         cli,
+        "_discovery_media_analysis_result",
+        lambda result: (_ for _ in ()).throw(
+            AssertionError("Media Analysis must remain disabled")
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
         "ChromeProvider",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Chrome must stay closed")),
     )
@@ -184,11 +191,11 @@ def test_discovery_help_exposes_stable_commands() -> None:
     assert all(value in root_help for value in ("search", "hydrate", "auth", "cache"))
     assert all(
         value in search_help
-        for value in ("--input", "--checkpoint", "--hydrate", "--browser", "--browser-fallback", "--no-browser")
+        for value in ("--input", "--checkpoint", "--hydrate", "--analyze-media", "--browser", "--browser-fallback", "--no-browser")
     )
     assert all(
         value in hydrate_help
-        for value in ("--input", "--max-hydrate", "--browser", "--browser-fallback", "--no-browser")
+        for value in ("--input", "--max-hydrate", "--analyze-media", "--browser", "--browser-fallback", "--no-browser")
     )
 
 
@@ -274,6 +281,13 @@ def test_candidate_batch_rejects_secrets_and_cannot_authorize_browser(tmp_path) 
     with __import__("pytest").raises(Exception):
         _candidate_batch_request(str(delegated))
 
+    payload = json.loads(candidate_batch_json())
+    payload["analyze_media"] = True
+    delegated_media = tmp_path / "delegated-media.json"
+    delegated_media.write_text(json.dumps(payload), encoding="utf-8")
+    with __import__("pytest").raises(Exception):
+        _candidate_batch_request(str(delegated_media))
+
 
 def test_discovery_hydrate_is_offline_from_search_and_does_not_open_chrome(tmp_path, monkeypatch) -> None:
     path = tmp_path / "batch.json"
@@ -298,6 +312,13 @@ def test_discovery_hydrate_is_offline_from_search_and_does_not_open_chrome(tmp_p
     monkeypatch.setattr(cli, "PublicHttpProvider", lambda *args, **kwargs: object())
     monkeypatch.setattr(cli, "EvidenceService", lambda provider: object())
     monkeypatch.setattr(cli, "CandidateIngestionService", FakeIngestionService)
+    monkeypatch.setattr(
+        cli,
+        "_discovery_media_analysis_result",
+        lambda result: (_ for _ in ()).throw(
+            AssertionError("Media Analysis must remain disabled")
+        ),
+    )
     monkeypatch.setattr(
         cli,
         "ChromeProvider",
@@ -333,6 +354,105 @@ def test_discovery_hydrate_is_offline_from_search_and_does_not_open_chrome(tmp_p
         "require_published_date": False,
         "allow_browser": False,
     }
+
+
+def test_discovery_search_media_requires_hydration_before_credentials(monkeypatch) -> None:
+    monkeypatch.setattr(
+        cli,
+        "default_discovery_secrets",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("credentials must not be accessed")
+        ),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["discovery", "search", "campus", "--analyze-media"],
+    )
+
+    assert result.exit_code != 0
+    assert "--analyze-media requires --hydrate" in str(result.exception)
+
+
+def test_discovery_search_explicit_media_wraps_the_hydrated_result(monkeypatch) -> None:
+    observed: dict[str, object] = {}
+
+    class FakeDiscoveryService:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def search(self, request: DiscoveryRequest) -> dict[str, object]:
+            observed["request"] = request
+            return {"schema_version": "1", "candidates": []}
+
+    def wrap(result):
+        observed["core"] = result
+        return {"schema_version": "2", "discovery_result": result, "media": []}
+
+    monkeypatch.setattr(cli, "default_discovery_secrets", lambda: FakeSecrets())
+    monkeypatch.setattr(cli, "default_discovery_store", lambda: object())
+    monkeypatch.setattr(cli, "BraveDiscoveryProvider", lambda *args: object())
+    monkeypatch.setattr(cli, "PublicHttpProvider", lambda *args, **kwargs: object())
+    monkeypatch.setattr(cli, "EvidenceService", lambda provider: object())
+    monkeypatch.setattr(cli, "DiscoveryService", FakeDiscoveryService)
+    monkeypatch.setattr(cli, "_discovery_media_analysis_result", wrap)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "discovery",
+            "search",
+            "campus",
+            "--hydrate",
+            "--analyze-media",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["schema_version"] == "2"
+    assert isinstance(observed["request"], DiscoveryRequest)
+    assert observed["request"].hydrate is True
+    assert observed["core"] == {"schema_version": "1", "candidates": []}
+
+
+def test_discovery_hydrate_explicit_media_wraps_ingestion_result(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "batch.json"
+    path.write_text(candidate_batch_json(), encoding="utf-8")
+    observed: dict[str, object] = {}
+
+    class FakeIngestionService:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def ingest(self, batch, **kwargs):
+            return {"schema_version": "1", "candidates": []}
+
+    def wrap(result):
+        observed["core"] = result
+        return {"schema_version": "2", "discovery_result": result, "media": []}
+
+    monkeypatch.setattr(cli, "default_discovery_store", lambda: object())
+    monkeypatch.setattr(cli, "PublicHttpProvider", lambda *args, **kwargs: object())
+    monkeypatch.setattr(cli, "EvidenceService", lambda provider: object())
+    monkeypatch.setattr(cli, "CandidateIngestionService", FakeIngestionService)
+    monkeypatch.setattr(cli, "_discovery_media_analysis_result", wrap)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "discovery",
+            "hydrate",
+            "--input",
+            str(path),
+            "--analyze-media",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["schema_version"] == "2"
+    assert observed["core"] == {"schema_version": "1", "candidates": []}
 
 
 def test_discovery_hydrate_browser_requires_explicit_cli_flag(tmp_path, monkeypatch) -> None:

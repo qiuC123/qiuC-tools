@@ -85,6 +85,8 @@ def test_packaged_discovery_help_includes_candidate_hydration() -> None:
     assert "smoke-localappdata" in script
     assert "'media', 'doctor'" in script
     assert "standard_qr.available" in script
+    assert "discovery media controls are missing" in script
+    assert script.count("--analyze-media") >= 2
 
 
 def test_agent_reach_installer_can_refresh_the_official_personal_skill() -> None:
