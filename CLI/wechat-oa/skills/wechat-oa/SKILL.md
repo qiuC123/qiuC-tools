@@ -2,7 +2,7 @@
 name: wechat-oa
 description: >
   Use the Windows-only wechat-oa command to discover and retrieve WeChat Official
-  Account articles, produce article evidence, read local HTML/Markdown, drafts,
+  Account articles, produce article or optional local QR/OCR media evidence, read local HTML/Markdown, drafts,
   and published messages, or to preview
   explicitly create one unpublished draft from a Word document, or safely
   back up, diff, and update an existing draft through a frozen plan. MUST USE

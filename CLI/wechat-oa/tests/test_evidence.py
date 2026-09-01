@@ -218,6 +218,26 @@ def test_evidence_service_and_unknown_identity() -> None:
     assert result.account_identity.status == IdentityStatus.UNKNOWN
 
 
+def test_evidence_service_forwards_explicit_no_cache_only_when_requested() -> None:
+    document = PublicArticleParser.parse(
+        article_html(),
+        "https://mp.weixin.qq.com/s/T",
+        Provider.HTTP,
+    )
+    calls: list[bool] = []
+
+    class ProviderStub:
+        def get_document(self, url: str, *, no_cache: bool = False):
+            calls.append(no_cache)
+            return document
+
+    service = EvidenceService(ProviderStub())
+    service.get("https://mp.weixin.qq.com/s/T")
+    service.get("https://mp.weixin.qq.com/s/T", no_cache=True)
+
+    assert calls == [False, True]
+
+
 def test_link_normalization_handles_bad_ports_empty_contacts_and_explicit_ports() -> None:
     assert PublicArticleParser._normalize_link("https://example.com:bad/x") is None
     assert PublicArticleParser._normalize_link("mailto:") is None

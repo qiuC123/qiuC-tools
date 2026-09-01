@@ -30,7 +30,7 @@ from wxcli.draft_import import WordDraftImporter
 from wxcli.draft_import import PreparedDraft
 from wxcli.draft_update import DraftUpdatePlanner
 from wxcli.errors import ErrorCode, ExitCode, InputError, ValidationError, WxcliError
-from wxcli.evidence import EvidenceService
+from wxcli.evidence import ArticleEvidence, EvidenceService
 from wxcli.discovery.auth import DiscoverySecretStore
 from wxcli.discovery.brave import BraveDiscoveryProvider
 from wxcli.discovery.ingestion import CandidateIngestionService
@@ -41,7 +41,14 @@ from wxcli.discovery.models import (
 )
 from wxcli.discovery.service import DiscoveryService, validate_discovery_tokens
 from wxcli.discovery.store import DiscoveryStore
-from wxcli.media import MediaCache
+from wxcli.media import (
+    ArticleMediaAnalyzer,
+    ArticleMediaDownloader,
+    MediaAnalysisConfiguration,
+    MediaAnalysisResult,
+    MediaCache,
+    MediaDownloader,
+)
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.official_draft import OfficialDraftWriter
 from wxcli.output import Output, configure_utf8_streams, is_interactive
@@ -115,6 +122,11 @@ def default_discovery_store() -> DiscoveryStore:
 def default_media_cache() -> MediaCache:
     """Return the dedicated non-secret cache for validated public image bytes."""
     return MediaCache(default_runtime_root() / "media-cache")
+
+
+def default_media_analysis_configuration() -> MediaAnalysisConfiguration:
+    """Return invocation-owned defaults recorded in every Media Evidence result."""
+    return MediaAnalysisConfiguration()
 
 
 def default_discovery_secrets() -> DiscoverySecretStore:
@@ -215,6 +227,11 @@ def article_from_public_url(
         "--no-browser",
         help="Prohibit Chrome for this request even when durable fallback is enabled.",
     ),
+    analyze_media: bool = typer.Option(
+        False,
+        "--analyze-media",
+        help="Explicitly download eligible images and run local QR/OCR analysis.",
+    ),
 ) -> None:
     """Read a supported public article URL through HTTP."""
     output = context.find_root().obj
@@ -229,24 +246,38 @@ def article_from_public_url(
     )
     _diagnose_browser_warning(output, decision)
     if decision.mode is BrowserMode.DIRECT:
-        output.success(
-            ChromeProvider(default_browser_profile(), cache=default_cache()).get(
-                url, no_cache=no_cache
-            )
-        )
+        chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
+        if analyze_media:
+            evidence = EvidenceService(chrome_provider).get(url, no_cache=no_cache)
+            output.success(_media_analysis_result(evidence, no_cache=no_cache))
+        else:
+            output.success(chrome_provider.get(url, no_cache=no_cache))
         return
     with httpx.Client(timeout=30.0) as client:
+        http_provider = PublicHttpProvider(client, default_cache())
+        core_result: object
         try:
-            article = PublicHttpProvider(client, default_cache()).get(url, no_cache=no_cache)
+            if analyze_media:
+                core_result = EvidenceService(http_provider).get(url, no_cache=no_cache)
+            else:
+                core_result = http_provider.get(url, no_cache=no_cache)
         except WxcliError as error:
             if error.code != ErrorCode.VERIFICATION_REQUIRED or not decision.allows_fallback:
                 _attach_browser_warning(error, decision)
                 raise
-            article = ChromeProvider(default_browser_profile(), cache=default_cache()).get(
-                url,
-                no_cache=no_cache,
-            )
-        output.success(article)
+            chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
+            if analyze_media:
+                core_result = EvidenceService(chrome_provider).get(
+                    url,
+                    no_cache=no_cache,
+                )
+            else:
+                core_result = chrome_provider.get(url, no_cache=no_cache)
+        if analyze_media:
+            assert isinstance(core_result, ArticleEvidence)
+            output.success(_media_analysis_result(core_result, no_cache=no_cache))
+        else:
+            output.success(core_result)
 
 
 @article_app.command("evidence")
@@ -264,6 +295,11 @@ def article_evidence(
         "--no-browser",
         help="Prohibit Chrome for this request even when durable fallback is enabled.",
     ),
+    analyze_media: bool = typer.Option(
+        False,
+        "--analyze-media",
+        help="Explicitly download eligible images and run local QR/OCR analysis.",
+    ),
 ) -> None:
     """Read one real WeChat page and return versioned article evidence."""
     output = _output(context)
@@ -277,7 +313,10 @@ def article_evidence(
     _diagnose_browser_warning(output, decision)
     if decision.mode is BrowserMode.DIRECT:
         chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
-        output.success(EvidenceService(chrome_provider).get(url))
+        evidence = EvidenceService(chrome_provider).get(url)
+        output.success(
+            _media_analysis_result(evidence) if analyze_media else evidence
+        )
         return
     with httpx.Client(timeout=30.0) as client:
         http_provider = PublicHttpProvider(client, default_cache())
@@ -290,7 +329,32 @@ def article_evidence(
             evidence = EvidenceService(
                 ChromeProvider(default_browser_profile(), cache=default_cache())
             ).get(url)
-        output.success(evidence)
+        output.success(_media_analysis_result(evidence) if analyze_media else evidence)
+
+
+def _media_analysis_result(
+    evidence: ArticleEvidence,
+    *,
+    no_cache: bool = False,
+) -> MediaAnalysisResult:
+    configuration = default_media_analysis_configuration()
+    downloads = ArticleMediaDownloader(
+        MediaDownloader(
+            max_bytes=configuration.limits.max_image_bytes,
+            max_pixels=configuration.limits.max_image_pixels,
+        ),
+        cache=None if no_cache else default_media_cache(),
+        limits=configuration.limits,
+    ).download(evidence.article)
+    media_evidence = ArticleMediaAnalyzer().analyze(
+        source_content_sha256=evidence.content_sha256,
+        downloads=downloads,
+        configuration=configuration,
+    )
+    return MediaAnalysisResult(
+        article_evidence=evidence,
+        media_evidence=media_evidence,
+    )
 
 
 @discovery_app.command("search")
