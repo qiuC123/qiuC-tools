@@ -34,7 +34,7 @@
 - PR #7 已合并可替换的 `OCRProvider`/`OCRRuntime` 与默认 `WindowsOCRProvider`：重新校验图片字节/哈希/尺寸/像素，最多 64 个重叠长图切片，稀疏结果最多一次受限放大、灰度和自动对比度重试，每次 Windows 进程限时 30 秒；不联网、不纠错，选择的预处理步骤进入 OCR Evidence。固定 PowerShell 桥接使用短期 PNG 和结构化 stdin，Base64 包装 UTF-8 JSON 防止控制台编码损坏，缺少引擎/语言与执行失败保持独立状态。合并前本地完整验证为 344 项 pytest 全绿，mypy 检查 43 个源文件无错误；真实本机合成中文图片字符码核对通过，PyInstaller 双命令发布包及离线冒烟通过。
 - PR #8 已合并 QR/OCR 分析编排：对下载结果做防御性复验，相同图片字节按 SHA-256 只分析一次并映射回每个文章图片位置；QR 与 OCR 失败互相隔离，错误哈希/语言关联被替换为稳定失败证据；调用方降低后的图片、QR、OCR 和文章限额由编排层再次强制执行；下载省略数进入 Media Evidence、摘要和稳定哈希。合并前本地完整验证为 356 项 pytest 全绿，mypy 检查 44 个源文件无错误；PyInstaller 与远端 Windows 包冒烟通过。
 - PR #9 已合并 `article get` 和 `article evidence` 的默认关闭 `--analyze-media`。显式启用后先生成 Article Evidence，再安全下载图片并返回外层 schema v2；不开启时不构造 Media Cache、下载器或分析器，原输出不变。媒体模式下的 `--no-cache` 同时禁用文章和图片缓存。合并前 362 项 pytest、mypy、Skill 校验和 Windows 打包 CI 通过。
-- 当前分支实现纯本地 `media doctor`：检查 JPEG/PNG/WebP/GIF，执行内存标准 QR 往返自检，通过受限 PowerShell 查询 Windows OCR、安装语言和默认 `zh-Hans` 可用性；不联网、不读凭据/缓存、不启动 Chrome、不安装组件。图片或 QR 缺失令整体失败，Windows OCR 缺失只保留可选能力状态。本机双命令实测 `overall: pass`，OCR 语言为 `en-US`、`zh-Hans-CN`，默认语言可用。
+- 当前分支实现纯本地 `media doctor`：检查 JPEG/PNG/WebP/GIF，执行内存标准 QR 往返自检，通过受限 PowerShell 查询 Windows OCR、安装语言和默认 `zh-Hans` 可用性；不联网、不读凭据/缓存、不启动 Chrome、不安装组件。图片或 QR 缺失令整体失败，Windows OCR 缺失只保留可选能力状态。本地完整验证为 373 项 pytest 全绿，mypy 检查 45 个源文件无错误，canonical Skill 校验通过；开发环境和临时 PyInstaller onedir 中的 `wechat-oa`/`wxcli` 双命令均实测 `overall: pass`，OCR 语言为 `en-US`、`zh-Hans-CN`，默认语言可用。
 
 ### 下一步计划
 
