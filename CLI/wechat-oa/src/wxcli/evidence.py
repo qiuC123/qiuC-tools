@@ -100,7 +100,12 @@ class ArticleEvidence(BaseModel):
 
 
 class EvidenceDocumentProvider(Protocol):
-    def get_document(self, url: str) -> PublicArticleDocument: ...
+    def get_document(
+        self,
+        url: str,
+        *,
+        no_cache: bool = False,
+    ) -> PublicArticleDocument: ...
 
 
 class EvidenceService:
@@ -113,8 +118,14 @@ class EvidenceService:
         self,
         url: str,
         expected_accounts: list[ExpectedAccount] | None = None,
+        *,
+        no_cache: bool = False,
     ) -> ArticleEvidence:
-        document = self._provider.get_document(url)
+        document = (
+            self._provider.get_document(url, no_cache=True)
+            if no_cache
+            else self._provider.get_document(url)
+        )
         return build_article_evidence(document, expected_accounts or [])
 
     @contextmanager
