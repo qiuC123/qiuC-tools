@@ -74,7 +74,9 @@ wechat-oa --json article evidence "URL"
 默认长期策略为 `never`，HTTP 遇到 `VERIFICATION_REQUIRED` 就停止。用户可对批量或
 单篇命令加 `--browser-fallback` 做一次性授权；兼容的 `--browser` 在单篇命令中仍直接
 使用 Chrome。若 Chrome 仍要求人工验证，结果会给出 `required_action:
-run_browser_login` 并停止本次 Browser Run。不得绕过验证或导出 Cookie。
+run_browser_login` 并停止本次无人值守 Browser Run。已知候选文章 URL 时，只有用户再次
+明确授权后，才运行 `wechat-oa --json browser verify "URL"` 打开该文章并等待人工处理；
+不得用 computer-use 或其他浏览器自动化接管验证窗口，也不得绕过验证或导出 Cookie。
 
 ## 职责边界
 
