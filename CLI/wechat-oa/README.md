@@ -2,7 +2,7 @@
 
 Canonical source: [`qiuC-tools/CLI/wechat-oa`](https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa).
 Windows x64 downloads are published under namespaced tags such as
-[`wechat-oa-v0.7.0`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.7.0).
+[`wechat-oa-v0.7.1`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.7.1).
 
 `wechat-oa` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再读取公众号原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
 
@@ -15,6 +15,8 @@ Direct Discovery Request JSON 输入、Discovery Bundle 和 QR/OCR 派生结果�
 
 0.7.0 新增原生 Exa Direct Discovery，并保留 Brave 默认兼容路径；Direct Discovery
 schema v1、单 JSON envelope、候选与微信原文证据边界均保持不变。
+
+0.7.1 修复 Exa 把日期提示误用为硬过滤和重复精确短语造成的候选漏召回，不改变调用契约。
 
 ## 环境与开发安装
 
@@ -282,8 +284,8 @@ GIF 解码和标准二维码执行打包自检，并查询 Windows 已安装的 
 
 ```powershell
 .\scripts\build-release.ps1
-.\dist\release\wechat-oa-0.7.0-windows-x64\wechat-oa.exe --version
-Get-FileHash .\dist\release\wechat-oa-0.7.0-windows-x64.zip -Algorithm SHA256
+.\dist\release\wechat-oa-0.7.1-windows-x64\wechat-oa.exe --version
+Get-FileHash .\dist\release\wechat-oa-0.7.1-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。构建脚本不会自动上传 GitHub 或 PyPI；维护者单独核验并发布版本化 Release 资产。

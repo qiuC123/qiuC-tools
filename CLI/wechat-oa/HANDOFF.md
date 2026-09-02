@@ -1,6 +1,6 @@
 # WeChat OA 项目交接说明
 
-## 0.7.1 Exa Direct Discovery 召回修复（开发中，2026-09-02）
+## 0.7.1 Exa Direct Discovery 召回修复（发布准备，2026-09-02）
 
 - 招聘雷达使用 `query="2027届 秋招"`、company/account=`腾讯` 和 2026-06-01 至 2026-09-02 窗口时，0.7.0 Exa 返回成功空结果，但已知存在严格且可回读的公众号文章 URL。
 - 根因是 0.7.0 同时把 company/account 重复编码为引号短语，并把证据日期窗口下推成 Exa `startPublishedDate`/`endPublishedDate` 硬过滤。Exa 官方契约明确日期过滤只返回带有且满足 provider 发布时间的链接，因此索引缺少日期的微信文章会被排除。
