@@ -21,7 +21,7 @@
 
 ### 当前 Git 与发布状态
 
-- 本轮开发分支：`codex/browser-verification-redirect`，基于已经合并 PR #12 的 `main`。
+- 本轮开发分支：`codex/browser-verification-navigation`，基于已经合并 PR #13 的 `main`。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
 - 原独立仓库的 `v0.5.1` 指向上述验收提交；monorepo 使用带工具名的发布标签，避免未来多个 CLI 的版本标签冲突。
 - monorepo 发布标签：`wechat-oa-v0.5.1`。该标签指向迁移和发布元数据提交；运行时代码仍对应已经验收的 0.5.1 基线。
@@ -38,6 +38,7 @@
 - PR #11 已合并发现批次的显式媒体分析：`discovery search --hydrate --analyze-media` 和 `discovery hydrate --input ... --analyze-media` 只分析已经成功生成 Article Evidence 的候选；不开启时原 schema v1 输出与资源构造均不变。开启后返回外层 schema v2，完整保留 Direct Discovery 或 Candidate Ingestion schema v1，并按 `candidate_index`、`article_identity` 和 `content_sha256` 关联独立 Media Evidence。Candidate Batch 不能自行开启媒体分析、选择限额或授权浏览器；批次限额为最多 200 个图片项、400 MiB 下载字节和 1,000,000 个 OCR 字符。本地完整验证为 382 项 pytest 全绿，mypy 检查 46 个源文件无错误，canonical Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
 - 本轮新增 `browser verify ARTICLE_URL` 交互式验证流程，修复自动 fallback 识别验证码后立即关闭 Chrome、调用 Agent 误以为窗口仍在等待的问题。无人值守 fallback 继续立即返回 `VERIFICATION_REQUIRED`；只有用户另行明确授权时，新命令才在专用可见 profile 中打开确切文章并最多等待 5 分钟，只观察页面分类、不点击或绕过验证，成功后直接返回 Article Evidence。canonical Skill 明确禁止使用 computer-use、窗口激活或通用浏览器自动化接管验证窗口。本地完整验证为 387 项 pytest 全绿，mypy 检查 46 个源文件无错误，Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
 - 2026-09-02 的真实文章复验发现微信会把部分验证请求重定向到 `https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha`，该页面可能没有原有文本验证码标记，导致 PR #12 构建误报 `PARSING_ERROR` 并立即关闭 Chrome。本轮热修只把精确 HTTPS 主机 `mp.weixin.qq.com`、无凭据/显式端口、精确路径 `/mp/wappoc_appmsgcaptcha` 识别为验证页；交互命令继续等待用户手动处理，无人值守读取返回 `VERIFICATION_REQUIRED`。本地完整验证为 389 项 pytest 全绿，mypy 检查 46 个源文件无错误，PyInstaller spike 和完整 Windows 双命令发布包通过。未发布的 0.5.1 热修开发包 SHA-256 为 `e95e2a4973d8b119fb032e4a36dc3c94e796cf9afefe0690612711006c979586`；正式发版时应升版本并生成新的 Release，不应覆盖现有 0.5.1 资产。
+- 同日安装 PR #13 热修包再做真实复验时，Playwright 在验证码页导航回文章页的瞬间调用 `Page.content`，返回“page is navigating and changing the content”，导致交互会话误报 `CHROME_ERROR`。第二个热修仅重试这一条明确的瞬时导航错误，其他 Playwright 错误仍立即失败，且重试继续受 5 分钟总截止时间约束。源码真实复验不再立即失败，完整等待 301.7 秒后因微信验证码提示“操作过于频繁，请稍后再试”而按设计返回 `VERIFICATION_REQUIRED`、`verification_outcome=timeout`；未绕过或自动操作验证码，也未取得文章证据。本地完整验证为 390 项 pytest 全绿，mypy 检查 46 个源文件无错误，PyInstaller spike 和完整 Windows 双命令发布包通过。最新未发布 0.5.1 热修开发包 SHA-256 为 `f5eb52df6736b3c42d141aab4938b9ba73c20c0f1f4d7e73d4378a0229fe638e`。
 
 ### 下一步计划
 
@@ -395,4 +396,4 @@ wechat-oa --json doctor
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks；本轮热修分支测试 389 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
+预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks；本轮热修分支测试 390 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
