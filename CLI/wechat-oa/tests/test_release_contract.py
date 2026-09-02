@@ -74,25 +74,25 @@ def test_073_release_scope_includes_native_exa_without_schema_break() -> None:
     assert 'includeDomains: ["mp.weixin.qq.com"]' in discovery
 
 
-def test_skill_install_source_is_pinned_to_published_072_release() -> None:
+def test_skill_install_source_is_pinned_to_published_073_release() -> None:
     operations = (
         ROOT / "skills" / "wechat-oa" / "references" / "operations.md"
     ).read_text(encoding="utf-8")
     release_base = (
         "https://github.com/qiuC123/qiuC-tools/releases/download/"
-        "wechat-oa-v0.7.2/wechat-oa-0.7.2-windows-x64.zip"
+        "wechat-oa-v0.7.3/wechat-oa-0.7.3-windows-x64.zip"
     )
     published_hash = (
-        "fd739fd0846effb0f0de02063cc5d60c"
-        "3e1335a1cc65b476b3d6bffbe5c6cfaa"
+        "be6c85c404f431af654ca6f1da7d07e6"
+        "22e9ea9a66947811315043a3c2b8daaf"
     )
 
-    assert "releases/tag/wechat-oa-v0.7.2" in operations
+    assert "releases/tag/wechat-oa-v0.7.3" in operations
     assert release_base in operations
     assert f"{release_base}.sha256" in operations
     assert operations.count(published_hash) == 2
-    assert "wechat-oa-0.7.2-windows-x64\\wechat-oa.exe" in operations
-    assert "0.7.1-windows-x64" not in operations
+    assert "wechat-oa-0.7.3-windows-x64\\wechat-oa.exe" in operations
+    assert "0.7.2-windows-x64" not in operations
 
 
 def test_live_smoke_requires_explicit_flags_and_a_discovery_capable_executable() -> None:

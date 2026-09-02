@@ -8,6 +8,7 @@
 - Exa 搜索策略版本进入私有 query fingerprint。安装新版本后不会复用 0.7.2 的旧 Exa 页面缓存，也无需执行破坏性的 `discovery cache clear`；Brave 缓存指纹和对外 schema 不变。
 - 已知腾讯 URL 的 MockTransport 回归冻结完整 deep 请求体，并继续验证 HTTP `VERIFICATION_REQUIRED`、不自动打开 Chrome、候选保留为 partial 的边界。本轮未执行新的真实 Exa、微信或 Chrome。
 - Direct Discovery schema v1、单 JSON envelope、provider failure reasons、Windows 凭据所有权、严格 URL 校验、原始 Exa rank provenance 和 Brave 默认兼容契约均不变。
+- 0.7.3 发布准备验证为 430 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `be6c85c404f431af654ca6f1da7d07e622e9ea9a66947811315043a3c2b8daaf`。
 
 ## 0.7.2 Exa 候选质量与 Hydration 排序修复（发布收口，2026-09-02）
 
