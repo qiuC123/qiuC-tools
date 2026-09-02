@@ -1,6 +1,24 @@
 # WeChat OA 项目交接说明
 
-## 新项目接续摘要（2026-09-01）
+## 0.6.0 发布收口（2026-09-02）
+
+- canonical `main` 已通过 PR #15 合入单篇文章原子 Evidence Bundle，合并提交为
+  `fc76831`。
+- 当前发布准备分支为 `codex/wechat-oa-0.6.0-release`，运行时和构建版本升至 0.6.0。
+- 0.6.0 范围包含 Media Evidence、安全图片下载与缓存、标准二维码、本地 Windows OCR、
+  单篇和发现批次的显式媒体分析、Media Doctor，以及单篇 Article Evidence Bundle。
+- schema-v2 Direct Discovery Request JSON 输入、Discovery Bundle 和派生 QR/OCR 缓存明确
+  延期，不阻塞 0.6.0。
+- 0.6.0 候选 Windows x64 ZIP 已通过隔离构建和双命令离线冒烟，SHA-256 为
+  `2a9e584ca83b21e69ed2ed83ddc3e033f773c06c92b1d2301355448111e52e96`；该值尚未成为
+  正式 Release 固定哈希。
+- 发布准备验证为 402 项 pytest 全绿、mypy 检查 47 个源文件无错误、canonical Skill
+  校验通过、PyInstaller spike 与完整 Windows 双命令构建通过。默认 Doctor 的五项 live
+  check 均保持 `skip`，Media Doctor 为 `overall: pass`。
+- 当前正式 GitHub Release 仍是 0.5.1；在 Release PR 合并、构建产物复核并再次取得用户
+  确认前，不创建 `wechat-oa-v0.6.0` tag、不上传 Release，也不替换本机稳定安装。
+
+## 历史项目接续摘要（2026-09-01）
 
 ### 当前工作位置
 
@@ -44,7 +62,7 @@
 
 按以下顺序推进，避免同时做版本治理和新功能：
 
-1. 0.6.0 的媒体模型、安全下载、原始字节缓存、二维码、Windows OCR、分析编排、单篇文章和发现批次的显式 CLI 控制，以及能力 Doctor 已完成；下一步实现可审计的 Evidence Bundle。
+1. 0.6.0 的媒体模型、安全下载、原始字节缓存、二维码、Windows OCR、分析编排、单篇文章和发现批次的显式 CLI 控制、能力 Doctor 与单篇 Evidence Bundle 已完成；下一步完成版本、构建、Release 和安装/回滚收口。
 2. WeChat OA 只输出稳定的 Article/Media Evidence，不负责其他项目如何消费、导入或同步这些数据。
 3. 0.6.0 完成后重复离线测试、PyInstaller 构建、安装/回滚和显式授权的真实微信验收。
 

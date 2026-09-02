@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article and Discovery CLI activation, offline Media Doctor, and single-Article Evidence Bundles are implemented; schema-v2 Direct Discovery Request input, derived-result caching, and Discovery Bundle output are not yet implemented.**
+**Status: Implemented for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article and Discovery CLI activation, offline Media Doctor, and single-Article Evidence Bundles are included. The schema-v2 Direct Discovery Request input is deferred, derived-result caching is deferred, and Discovery Bundle output is deferred from 0.6.0.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
