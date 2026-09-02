@@ -9,6 +9,12 @@
   单篇和发现批次的显式媒体分析、Media Doctor，以及单篇 Article Evidence Bundle。
 - schema-v2 Direct Discovery Request JSON 输入、Discovery Bundle 和派生 QR/OCR 缓存明确
   延期，不阻塞 0.6.0。
+- 0.6.0 候选 Windows x64 ZIP 已通过隔离构建和双命令离线冒烟，SHA-256 为
+  `2a9e584ca83b21e69ed2ed83ddc3e033f773c06c92b1d2301355448111e52e96`；该值尚未成为
+  正式 Release 固定哈希。
+- 发布准备验证为 402 项 pytest 全绿、mypy 检查 47 个源文件无错误、canonical Skill
+  校验通过、PyInstaller spike 与完整 Windows 双命令构建通过。默认 Doctor 的五项 live
+  check 均保持 `skip`，Media Doctor 为 `overall: pass`。
 - 当前正式 GitHub Release 仍是 0.5.1；在 Release PR 合并、构建产物复核并再次取得用户
   确认前，不创建 `wechat-oa-v0.6.0` tag、不上传 Release，也不替换本机稳定安装。
 
