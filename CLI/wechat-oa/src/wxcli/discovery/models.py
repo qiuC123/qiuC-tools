@@ -301,7 +301,7 @@ class DiscoveryResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["1"] = DISCOVERY_SCHEMA_VERSION
-    search_provider: Literal["brave"]
+    search_provider: str = Field(pattern=_IDENTIFIER_PATTERN)
     next_cursor: str | None = None
     checkpoint: str
     summary: DiscoverySummary

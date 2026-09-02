@@ -9,6 +9,7 @@ from wxcli.discovery.models import DiscoveryRequest, SearchPage
 
 class DiscoveryProvider(Protocol):
     name: str
+    page_size: int
 
     def search_page(
         self, request: DiscoveryRequest, *, offset: int, count: int

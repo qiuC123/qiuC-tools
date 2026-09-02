@@ -20,10 +20,16 @@ NOW = datetime(2026, 8, 1, 12, tzinfo=UTC)
 
 
 class FakeDiscoveryProvider:
-    name = "brave"
-
-    def __init__(self, pages: dict[int, SearchPage]) -> None:
+    def __init__(
+        self,
+        pages: dict[int, SearchPage],
+        *,
+        name: str = "brave",
+        page_size: int = 20,
+    ) -> None:
         self.pages = pages
+        self.name = name
+        self.page_size = page_size
         self.calls: list[int] = []
 
     def search_page(self, request: DiscoveryRequest, *, offset: int, count: int) -> SearchPage:
@@ -106,6 +112,46 @@ def test_search_validates_deduplicates_paginates_caches_and_returns_cursor(tmp_p
     cached = service.search(DiscoveryRequest(query="2027 校园招聘", limit=2))
     assert len(cached.candidates) == 2
     assert provider.calls == []
+
+
+def test_provider_page_size_and_name_drive_cached_cursor_continuation(tmp_path) -> None:
+    page = SearchPage(
+        hits=[
+            hit(index, f"https://mp.weixin.qq.com/s/T{index}")
+            for index in range(1, 61)
+        ],
+        has_more=False,
+    )
+    provider = FakeDiscoveryProvider({0: page}, name="exa", page_size=100)
+    service = DiscoveryService(
+        provider,
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        now=lambda: NOW,
+    )
+
+    first = service.search(DiscoveryRequest(query="campus", limit=50))
+    assert first.search_provider == "exa"
+    assert len(first.candidates) == 50
+    assert first.next_cursor is not None
+    assert {item.search_provenance.provider for item in first.candidates} == {"exa"}
+    assert provider.calls == [0]
+
+    provider.calls.clear()
+    second = service.search(
+        DiscoveryRequest(query="campus", limit=50, cursor=first.next_cursor)
+    )
+    assert len(second.candidates) == 10
+    assert second.next_cursor is None
+    assert provider.calls == []
+
+
+def test_invalid_provider_page_size_is_rejected_before_search(tmp_path) -> None:
+    provider = FakeDiscoveryProvider({}, page_size=0)
+
+    with __import__("pytest").raises(WxcliError) as raised:
+        DiscoveryService(provider, DiscoveryStore(tmp_path / "state.sqlite3"))
+
+    assert raised.value.code == ErrorCode.LOCAL_CONFIGURATION_ERROR
 
 
 def test_new_only_and_checkpoint_are_incremental(tmp_path) -> None:
