@@ -199,6 +199,32 @@ $invalidInput = ConvertFrom-SingleJson (
 if ($invalidInput.ok -or $invalidInput.error.code -ne 'INVALID_ARGUMENT') {
     throw 'Packaged WeChat OA invalid-argument smoke test failed.'
 }
+$articleGetHelp = Invoke-PackagedWxcli @('article', 'get', '--help')
+$articleEvidenceHelp = Invoke-PackagedWxcli @('article', 'evidence', '--help')
+if (
+    $articleGetHelp.Stdout -notmatch '--bundle' -or
+    $articleGetHelp.Stdout -notmatch '--bundle-metadata-only' -or
+    $articleEvidenceHelp.Stdout -notmatch '--bundle' -or
+    $articleEvidenceHelp.Stdout -notmatch '--bundle-metadata-only'
+) {
+    throw 'Packaged WeChat OA Evidence Bundle controls are missing.'
+}
+$bundlePreflightTarget = Join-Path $buildRoot 'bundle-preflight-existing'
+New-Item -ItemType Directory -Path $bundlePreflightTarget | Out-Null
+$bundlePreflight = ConvertFrom-SingleJson (
+    Invoke-PackagedWxcli @(
+        '--json',
+        'article',
+        'evidence',
+        'https://mp.weixin.qq.com/s/PACKAGED_BUNDLE_PREFLIGHT',
+        '--analyze-media',
+        '--bundle',
+        $bundlePreflightTarget
+    ) @(3)
+)
+if ($bundlePreflight.ok -or $bundlePreflight.error.code -ne 'VALIDATION_ERROR') {
+    throw 'Packaged WeChat OA Evidence Bundle preflight smoke test failed.'
+}
 $authStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'auth', 'status'))
 if (-not $authStatus.ok) {
     throw 'Packaged WeChat OA keyring smoke test failed.'

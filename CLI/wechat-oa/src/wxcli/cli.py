@@ -51,13 +51,17 @@ from wxcli.discovery.store import DiscoveryStore
 from wxcli.media import (
     ArticleMediaAnalyzer,
     ArticleMediaDownloader,
+    ArticleMediaDownloads,
+    EvidenceBundleWriter,
     MediaAnalysisConfiguration,
     MediaAnalysisLimits,
     MediaAnalysisResult,
+    MediaBundleResult,
     MediaCache,
     MediaDoctor,
     MediaDownloader,
     MediaEvidence,
+    preflight_bundle_destination,
 )
 from wxcli.official_check import OfficialReadOnlyChecker
 from wxcli.official_draft import OfficialDraftWriter
@@ -247,11 +251,26 @@ def article_from_public_url(
         "--analyze-media",
         help="Explicitly download eligible images and run local QR/OCR analysis.",
     ),
+    bundle: Path | None = typer.Option(
+        None,
+        "--bundle",
+        help="Atomically create an Evidence Bundle in this new directory.",
+    ),
+    bundle_metadata_only: bool = typer.Option(
+        False,
+        "--bundle-metadata-only",
+        help="Omit original image files from the requested Evidence Bundle.",
+    ),
 ) -> None:
     """Read a supported public article URL through HTTP."""
     output = context.find_root().obj
     if not isinstance(output, Output):
         raise WxcliError(ErrorCode.GENERAL_ERROR, "The command output is unavailable.")
+    bundle_writer = _requested_bundle_writer(
+        bundle,
+        analyze_media=analyze_media,
+        metadata_only=bundle_metadata_only,
+    )
     decision = resolve_browser_decision(
         default_browser_policy(),
         browser=browser,
@@ -264,7 +283,14 @@ def article_from_public_url(
         chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
         if analyze_media:
             evidence = EvidenceService(chrome_provider).get(url, no_cache=no_cache)
-            output.success(_media_analysis_result(evidence, no_cache=no_cache))
+            output.success(
+                _media_analysis_result(
+                    evidence,
+                    no_cache=no_cache,
+                    bundle_writer=bundle_writer,
+                    bundle_metadata_only=bundle_metadata_only,
+                )
+            )
         else:
             output.success(chrome_provider.get(url, no_cache=no_cache))
         return
@@ -290,7 +316,14 @@ def article_from_public_url(
                 core_result = chrome_provider.get(url, no_cache=no_cache)
         if analyze_media:
             assert isinstance(core_result, ArticleEvidence)
-            output.success(_media_analysis_result(core_result, no_cache=no_cache))
+            output.success(
+                _media_analysis_result(
+                    core_result,
+                    no_cache=no_cache,
+                    bundle_writer=bundle_writer,
+                    bundle_metadata_only=bundle_metadata_only,
+                )
+            )
         else:
             output.success(core_result)
 
@@ -315,9 +348,24 @@ def article_evidence(
         "--analyze-media",
         help="Explicitly download eligible images and run local QR/OCR analysis.",
     ),
+    bundle: Path | None = typer.Option(
+        None,
+        "--bundle",
+        help="Atomically create an Evidence Bundle in this new directory.",
+    ),
+    bundle_metadata_only: bool = typer.Option(
+        False,
+        "--bundle-metadata-only",
+        help="Omit original image files from the requested Evidence Bundle.",
+    ),
 ) -> None:
     """Read one real WeChat page and return versioned article evidence."""
     output = _output(context)
+    bundle_writer = _requested_bundle_writer(
+        bundle,
+        analyze_media=analyze_media,
+        metadata_only=bundle_metadata_only,
+    )
     decision = resolve_browser_decision(
         default_browser_policy(),
         browser=browser,
@@ -330,7 +378,13 @@ def article_evidence(
         chrome_provider = ChromeProvider(default_browser_profile(), cache=default_cache())
         evidence = EvidenceService(chrome_provider).get(url)
         output.success(
-            _media_analysis_result(evidence) if analyze_media else evidence
+            _media_analysis_result(
+                evidence,
+                bundle_writer=bundle_writer,
+                bundle_metadata_only=bundle_metadata_only,
+            )
+            if analyze_media
+            else evidence
         )
         return
     with httpx.Client(timeout=30.0) as client:
@@ -344,18 +398,56 @@ def article_evidence(
             evidence = EvidenceService(
                 ChromeProvider(default_browser_profile(), cache=default_cache())
             ).get(url)
-        output.success(_media_analysis_result(evidence) if analyze_media else evidence)
+        output.success(
+            _media_analysis_result(
+                evidence,
+                bundle_writer=bundle_writer,
+                bundle_metadata_only=bundle_metadata_only,
+            )
+            if analyze_media
+            else evidence
+        )
 
 
 def _media_analysis_result(
     evidence: ArticleEvidence,
     *,
     no_cache: bool = False,
-) -> MediaAnalysisResult:
-    return MediaAnalysisResult(
+    bundle_writer: EvidenceBundleWriter | None = None,
+    bundle_metadata_only: bool = False,
+) -> MediaAnalysisResult | MediaBundleResult:
+    media_evidence, downloads = _analyze_article_media(evidence, no_cache=no_cache)
+    if bundle_writer is None:
+        return MediaAnalysisResult(
+            article_evidence=evidence,
+            media_evidence=media_evidence,
+        )
+    bundle = bundle_writer.create(
         article_evidence=evidence,
-        media_evidence=_media_evidence(evidence, no_cache=no_cache),
+        media_evidence=media_evidence,
+        downloads=downloads,
+        metadata_only=bundle_metadata_only,
     )
+    return MediaBundleResult(
+        article_evidence=evidence,
+        media_evidence=media_evidence,
+        bundle=bundle,
+    )
+
+
+def _requested_bundle_writer(
+    bundle: Path | None,
+    *,
+    analyze_media: bool,
+    metadata_only: bool,
+) -> EvidenceBundleWriter | None:
+    if bundle is None:
+        if metadata_only:
+            raise InputError("--bundle-metadata-only requires --bundle.")
+        return None
+    if not analyze_media:
+        raise InputError("--bundle requires --analyze-media.")
+    return EvidenceBundleWriter(preflight_bundle_destination(bundle))
 
 
 def _media_evidence(
@@ -367,6 +459,25 @@ def _media_evidence(
     analyzer: ArticleMediaAnalyzer | None = None,
     cache: MediaCache | None = None,
 ) -> MediaEvidence:
+    return _analyze_article_media(
+        evidence,
+        no_cache=no_cache,
+        budget=budget,
+        downloader=downloader,
+        analyzer=analyzer,
+        cache=cache,
+    )[0]
+
+
+def _analyze_article_media(
+    evidence: ArticleEvidence,
+    *,
+    no_cache: bool = False,
+    budget: DiscoveryMediaBudget | None = None,
+    downloader: MediaDownloader | None = None,
+    analyzer: ArticleMediaAnalyzer | None = None,
+    cache: MediaCache | None = None,
+) -> tuple[MediaEvidence, ArticleMediaDownloads]:
     configuration = default_media_analysis_configuration()
     if budget is not None:
         configuration = configuration.model_copy(
@@ -392,17 +503,19 @@ def _media_evidence(
     ).download(evidence.article)
     actual_analyzer = analyzer or ArticleMediaAnalyzer()
     if budget is None:
-        return actual_analyzer.analyze(
+        media_evidence = actual_analyzer.analyze(
             source_content_sha256=evidence.content_sha256,
             downloads=downloads,
             configuration=configuration,
         )
-    return actual_analyzer.analyze(
-        source_content_sha256=evidence.content_sha256,
-        downloads=downloads,
-        configuration=configuration,
-        ocr_character_budget=budget.max_ocr_characters,
-    )
+    else:
+        media_evidence = actual_analyzer.analyze(
+            source_content_sha256=evidence.content_sha256,
+            downloads=downloads,
+            configuration=configuration,
+            ocr_character_budget=budget.max_ocr_characters,
+        )
+    return media_evidence, downloads
 
 
 def _discovery_media_analysis_result(

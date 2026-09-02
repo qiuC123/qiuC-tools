@@ -136,6 +136,8 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "import-word --confirm" in skill
     assert "media cache clear" in skill
     assert "--analyze-media" in skill
+    assert "--bundle" in skill
+    assert "Evidence Bundle" in skill
     assert "未发布草稿" in references
     assert "AppSecret" in references
     assert "绕过验证" in references
@@ -146,6 +148,8 @@ def test_wechat_oa_skill_contains_required_contracts() -> None:
     assert "Candidate Batch 是非可信输入" in references
     assert "candidate_index" in references
     assert "自动 fallback 遇到挑战时会立即退出" in references
+    assert "metadata-only 仍会执行显式媒体分析" in references
+    assert "Discovery Bundle 当前未实现" in references
 
 
 def test_wxcli_skill_is_a_narrow_compatibility_alias() -> None:

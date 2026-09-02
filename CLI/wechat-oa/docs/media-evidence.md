@@ -1,6 +1,6 @@
 # Media Evidence Design
 
-**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article and Discovery CLI activation, and offline Media Doctor are implemented; schema-v2 Direct Discovery Request input, derived-result caching, and Evidence Bundles are not yet implemented.**
+**Status: Implementation in progress for WeChat OA 0.6.0. The versioned Media Evidence models, safe downloader, original-byte Media Cache, bounded acquisition and QR/OCR orchestration, packaged standard-QR analyzer, replaceable Windows local-OCR provider, explicit single-Article and Discovery CLI activation, offline Media Doctor, and single-Article Evidence Bundles are implemented; schema-v2 Direct Discovery Request input, derived-result caching, and Discovery Bundle output are not yet implemented.**
 
 This document freezes the optional image-download, QR-decoding, local-OCR, Media Evidence, and Evidence Bundle boundaries for wxcli 0.6.0. These commands are not part of the 0.5.0 implementation. Browser reliability remains the separate 0.5.0 scope described in [Browser Fallback Design](browser-fallback.md).
 
@@ -263,17 +263,49 @@ It does not clear Article Cache, discovery history/checkpoints, Browser Session 
 
 ## Evidence Bundles
 
-An Evidence Bundle is optional and requires Media Analysis. A caller may request it through an explicit CLI output directory. A trusted Direct Discovery Request may also specify the output directory because that document is a caller-owned control plane; Candidate Batch data may not specify any filesystem path.
+An Evidence Bundle is optional and requires Media Analysis. The implemented single-Article controls
+accept a new local destination through `--bundle DIRECTORY`:
 
-By default the bundle contains the original bytes of every successfully analyzed image under the existing resource limits. wxcli does not resize, recompress, re-encode, or otherwise modify those bytes. Generated filenames use only deterministic image indexes and SHA-256 values. `--bundle-metadata-only` omits binary image artifacts while retaining manifests, hashes, and per-image outcomes; it causes no additional download.
+```powershell
+wechat-oa --json article get "WECHAT_URL" --analyze-media --bundle .\evidence
+wechat-oa --json article evidence "WECHAT_URL" --analyze-media --bundle .\evidence
+```
 
-The destination must not exist and must not resolve through a Windows symbolic link, junction, mount point, or other reparse point. Parent and staging paths are resolved and guarded before each destructive cleanup. wxcli writes a sibling staging directory, verifies the manifest and hashes, and atomically renames it to the requested destination. It never offers `--force`, overwrites, or merges into an existing file or directory. Failure removes only the guarded staging directory and leaves any pre-existing paths untouched.
+`--bundle` is rejected without `--analyze-media`. A trusted Direct Discovery Request may eventually
+specify an output directory because that document is a caller-owned control plane, but this and
+Discovery CLI Bundle output remain deferred. Candidate Batch data may not specify any filesystem
+path.
+
+By default the bundle contains the original bytes of every successfully analyzed image occurrence
+under the existing resource limits. wxcli does not resize, recompress, re-encode, or otherwise
+modify those bytes. Generated filenames use only deterministic image indexes and SHA-256 values.
+`--bundle-metadata-only` is valid only with `--bundle`; it omits binary image artifacts while
+retaining manifests, hashes, and per-image outcomes. Media Analysis still performs its normal
+bounded acquisition because the metadata is derived from those verified bytes, but the option
+causes no second download.
+
+The destination must not exist, its parent must already exist, and neither may resolve through a
+Windows symbolic link, junction, mount point, or other reparse point. Parent and staging paths are
+resolved and guarded before each destructive cleanup. wxcli writes a sibling staging directory,
+verifies the manifest and every listed SHA-256, and atomically renames it to the requested
+destination. It never offers `--force`, overwrites, or merges into an existing file or directory.
+Failure removes only the guarded staging directory and leaves any pre-existing paths untouched.
 
 Destination and capability preflight runs before any live Article or image request. Because a Bundle is an explicitly requested deliverable, a later staging, disk, manifest, hash-verification, or final-rename failure returns a nonzero command error rather than claiming partial bundle success.
 
 On Ctrl+C or equivalent cancellation, wxcli schedules no new downloads or analyses, closes active files and local analyzers, rolls back incomplete cache transactions, and removes only its guarded incomplete bundle staging directory. It preserves valid cache entries and any previously completed final Evidence Bundle.
 
-The bundle contains versioned Article Evidence and Media Evidence JSON, Article Markdown, external-link and image manifests, hashes, and explicitly requested image artifacts. It omits raw search-provider responses, API credentials, Cookies, request headers, Browser Session data, and full dynamic WeChat HTML. Creating a bundle does not open it or any contained link.
+The implemented schema-v1 directory contains `article-evidence.v1.json`,
+`media-evidence.v1.json`, `article.md`, `external-links.json`, `images.json`, and
+`manifest.json`. Default bundles also contain `images/INDEX-SHA256.FORMAT` original-byte
+artifacts. `manifest.json` records the stable source evidence hashes plus the byte length and
+SHA-256 of every other file; the command reopens and verifies the completed staging contents before
+the final rename. The schema-v2 command result gains a `bundle` summary only when Bundle creation
+was explicitly requested, so ordinary media output remains unchanged.
+
+Bundles omit raw search-provider responses, API credentials, Cookies, request headers, Browser
+Session data, and full dynamic WeChat HTML. Creating a bundle does not open it or any contained
+link.
 
 ## Test and acceptance contract
 
@@ -292,11 +324,17 @@ Ordinary tests remain offline. They use synthetic image fixtures, fake DNS and H
 - bounded network and 429 retry behavior with no retry or source switch for terminal failures;
 - SHA-256 cache verification, corrupt-entry removal, expiry-first cleanup, and least-recently-used eviction;
 - per-image partial outcomes and deterministic ordering;
-- guarded atomic bundle creation, existing/reparse-destination refusal, metadata-only mode, original-byte preservation, generated safe names, and safe cleanup;
+- guarded atomic Bundle creation, missing-parent and existing/reparse-destination refusal,
+  metadata-only mode, original-byte preservation, generated safe names, and safe cleanup;
 - requested-bundle nonzero failure behavior and cancellation cleanup without deleting completed artifacts;
 - absence of Cookies, authorization data, raw search responses, and dynamic HTML from output, cache, fixtures, and bundles.
 
-The standard-QR analyzer is required in the packaged EXE and its absence fails the build. Windows OCR is an optional operating-system capability and its absence does not prevent wxcli startup. Offline packaged smoke covers `media doctor`, a standard-QR fixture, `ocr_unavailable`, schema selection, and guarded atomic Bundle creation.
+The standard-QR analyzer is required in the packaged EXE and its absence fails the build. Windows
+OCR is an optional operating-system capability and its absence does not prevent wxcli startup.
+Offline source tests cover guarded atomic Bundle creation and rollback. Packaged smoke confirms both
+single-Article Bundle controls are present and proves an existing destination is rejected before any
+network request; it also covers `media doctor`, a standard-QR fixture, `ocr_unavailable`, and schema
+selection.
 
 Packaged live tests require explicit authorization for real WeChat reads and a separate explicit Media Analysis control. They never open QR destinations. Fixtures must be owned or clearly licensed for the test. Real Article text, images, and QR payloads stay in a Git-ignored temporary acceptance directory; retained reports contain only statistics and sanitized summaries. Acceptance uses a frozen, rights-cleared image benchmark and requires at least 95% successful standard-QR decoding with zero incorrect payloads on that benchmark, Chinese OCR character error rate no greater than 10% on readable recruitment posters with the supported local engine installed, no fetch outside the approved WeChat media hosts, and no regression in core Article Evidence hashes.
 
