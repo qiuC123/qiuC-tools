@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from wxcli.discovery.identity import _one, article_identity, query_fingerprint
+from wxcli.discovery import identity
 from wxcli.discovery.models import (
     ArticleCandidate,
     CandidateConfidence,
@@ -94,6 +95,20 @@ def test_query_fingerprint_ignores_run_controls_but_includes_query() -> None:
 
     assert first == second
     assert first != different
+
+
+def test_exa_strategy_version_invalidates_provider_cache(monkeypatch) -> None:
+    discovery_request = request(
+        companies=["腾讯"],
+        expected_accounts=[ExpectedAccount(display_names=["腾讯"])],
+    )
+    current = query_fingerprint(discovery_request, "exa")
+    brave = query_fingerprint(discovery_request, "brave")
+
+    monkeypatch.setattr(identity, "EXA_DISCOVERY_STRATEGY_VERSION", "next-strategy")
+
+    assert query_fingerprint(discovery_request, "exa") != current
+    assert query_fingerprint(discovery_request, "brave") == brave
 
 
 def test_cursor_and_checkpoint_are_bound_to_provider_and_query() -> None:

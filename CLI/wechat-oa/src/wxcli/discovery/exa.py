@@ -17,6 +17,13 @@ from wxcli.errors import ErrorCode, WxcliError
 
 EXA_SEARCH_URL = "https://api.exa.ai/search"
 _EXA_RESULT_LIMIT = 100
+_EXA_QUERY_LIMIT = 2_000
+_EXA_SYSTEM_PROMPT = (
+    "Prioritize direct articles published by the requested WeChat Official Account "
+    "or company that match the complete topic and approximate publication window. "
+    "Deprioritize other organizations, aggregators, reposts, interview stories, and "
+    "generic roundups. Treat dates as soft retrieval guidance, not hard filters."
+)
 
 
 class ExaDiscoveryProvider:
@@ -47,10 +54,12 @@ class ExaDiscoveryProvider:
             return SearchPage(hits=[], has_more=False)
         payload: dict[str, Any] = {
             "query": _build_query(request),
+            "additionalQueries": _build_additional_queries(request),
             "includeDomains": ["mp.weixin.qq.com"],
             "numResults": min(max(count, 1), _EXA_RESULT_LIMIT),
-            "type": "auto",
+            "type": "deep",
             "moderation": True,
+            "systemPrompt": _EXA_SYSTEM_PROMPT,
         }
         response = self._request(payload)
         try:
@@ -157,12 +166,47 @@ class ExaDiscoveryProvider:
 
 
 def _build_query(request: DiscoveryRequest) -> str:
+    subjects = _subject_terms(request)
+    topic = " ".join(_unique_terms([request.query, *_query_expansions(request.query)]))
+    if subjects:
+        lead = f"优先查找由“{'、'.join(subjects)}”微信公众号直接发布的文章"
+    else:
+        lead = "查找微信公众号直接发布的文章"
+    clauses = [lead, f"主题：{topic}"]
+    if window := _soft_publication_window(request):
+        clauses.append(window)
+    return _bounded_query("。".join(clauses) + "。")
+
+
+def _build_additional_queries(request: DiscoveryRequest) -> list[str]:
+    subjects = _subject_terms(request)
+    expansions = _query_expansions(request.query)
+    numeric_terms = re.findall(r"(?<!\d)\d{4}(?!\d)", request.query)
+    candidates: list[str] = [" ".join([*subjects, request.query])]
+    if expansions:
+        candidates.append(" ".join([*subjects, *expansions]))
+    if numeric_terms and any(term in request.query for term in ("秋招", "春招", "校招", "校园招聘")):
+        candidates.append(
+            " ".join([*subjects, *numeric_terms, "人才计划", "校招", "校园招聘"])
+        )
+    publication_years = _publication_years(request)
+    if publication_years:
+        candidates.append(
+            " ".join(
+                [*subjects, request.query, *(f"{year}年发布" for year in publication_years)]
+            )
+        )
+    return [_bounded_query(value) for value in _unique_terms(candidates)][:10]
+
+
+def _subject_terms(request: DiscoveryRequest) -> list[str]:
     terms = [*request.companies]
     for account in request.expected_accounts:
         terms.extend(account.display_names)
-    terms.append("官方公众号")
-    terms.append(request.query)
-    terms.extend(_query_expansions(request.query))
+    return _unique_terms(terms)
+
+
+def _unique_terms(terms: list[str]) -> list[str]:
     unique_terms: list[str] = []
     seen: set[str] = set()
     for term in terms:
@@ -171,7 +215,7 @@ def _build_query(request: DiscoveryRequest) -> str:
             continue
         seen.add(identity)
         unique_terms.append(term)
-    return " ".join(unique_terms)
+    return unique_terms
 
 
 def _query_expansions(value: str) -> list[str]:
@@ -186,6 +230,31 @@ def _query_expansions(value: str) -> list[str]:
     if "校园招聘" in normalized and "校招" not in normalized:
         expansions.append("校招")
     return expansions
+
+
+def _soft_publication_window(request: DiscoveryRequest) -> str | None:
+    if request.published_after and request.published_before:
+        return (
+            "发布时间约在 "
+            f"{request.published_after.isoformat()} 至 {request.published_before.isoformat()}"
+        )
+    if request.published_after:
+        return f"发布时间约在 {request.published_after.isoformat()} 之后"
+    if request.published_before:
+        return f"发布时间约在 {request.published_before.isoformat()} 之前"
+    return None
+
+
+def _publication_years(request: DiscoveryRequest) -> list[int]:
+    years: list[int] = []
+    for value in (request.published_after, request.published_before):
+        if value is not None and value.year not in years:
+            years.append(value.year)
+    return years
+
+
+def _bounded_query(value: str) -> str:
+    return value[:_EXA_QUERY_LIMIT]
 
 
 def _optional_string(value: object, maximum: int) -> str | None:
