@@ -1,5 +1,14 @@
 # WeChat OA 项目交接说明
 
+## 0.7.1 Exa Direct Discovery 召回修复（发布准备，2026-09-02）
+
+- 招聘雷达使用 `query="2027届 秋招"`、company/account=`腾讯` 和 2026-06-01 至 2026-09-02 窗口时，0.7.0 Exa 返回成功空结果，但已知存在严格且可回读的公众号文章 URL。
+- 根因是 0.7.0 同时把 company/account 重复编码为引号短语，并把证据日期窗口下推成 Exa `startPublishedDate`/`endPublishedDate` 硬过滤。Exa 官方契约明确日期过滤只返回带有且满足 provider 发布时间的链接，因此索引缺少日期的微信文章会被排除。
+- 修复将 company/account 作为去重的自然语义提示，不再使用强制引号短语；日期窗口不再下推给 Exa，仍参与本地候选排序，并只在成功 Hydration 后依据微信原文 `published_at` 做可信过滤。
+- 模拟回归使用已知严格 URL、标题、账号提示和无 Exa 日期元数据的响应；在 `hydrate=true`、`allow_browser=false` 且 HTTP 返回 `VERIFICATION_REQUIRED` 时，候选仍被保留并返回 `summary.partial=true`，不会自动打开 Chrome或伪造 Article Evidence。
+- Direct Discovery schema v1、单 UTF-8 JSON envelope、provider failure reasons、Windows 凭据所有权、严格 URL 校验及 Brave 默认兼容契约均不变。本轮测试不调用真实 Exa、微信或 Chrome。
+- 0.7.1 发布准备验证为 427 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `abf741a67b0c01a2bb7364e092f927b13065ff92b57c70c9ed65fa4c20240ee1`。
+
 ## 0.7.0 原生 Exa Direct Discovery 发布收口（2026-09-02）
 
 - 招聘雷达会直接调用 `wechat-oa --json discovery search ... --provider exa --hydrate --no-browser`，不会传递 Exa Key，并会从子进程环境移除 `EXA_API_KEY`。

@@ -2,7 +2,7 @@
 
 Canonical source: [`qiuC-tools/CLI/wechat-oa`](https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa).
 Windows x64 downloads are published under namespaced tags such as
-[`wechat-oa-v0.7.0`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.7.0).
+[`wechat-oa-v0.7.1`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.7.1).
 
 `wechat-oa` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再读取公众号原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
 
@@ -15,6 +15,8 @@ Direct Discovery Request JSON 输入、Discovery Bundle 和 QR/OCR 派生结果�
 
 0.7.0 新增原生 Exa Direct Discovery，并保留 Brave 默认兼容路径；Direct Discovery
 schema v1、单 JSON envelope、候选与微信原文证据边界均保持不变。
+
+0.7.1 修复 Exa 把日期提示误用为硬过滤和重复精确短语造成的候选漏召回，不改变调用契约。
 
 ## 环境与开发安装
 
@@ -190,6 +192,7 @@ wechat-oa doctor --allow-live-api
 - 搜索命中始终只是 Candidate。只有 `--hydrate` 成功读取真实微信原文后才会产生 Article Evidence；失败会保留为安全的 `hydration_attempt`，不会用搜索摘要伪造正文。
 - 默认最多返回 50 个候选。启用原文读取后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
 - `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
+- Exa 不把发布时间窗口下推成 `startPublishedDate`/`endPublishedDate` 硬过滤，避免因搜索索引缺少日期而漏掉候选；窗口只用于候选排序，并在成功回读微信原文后依据真实 `published_at` 过滤。
 - `next_cursor` 只续下一页；`checkpoint` 与 `--new-only` 用于同一规范查询的增量发现。搜索响应缓存 15 分钟，候选历史保留 180 天，原文章缓存仍为 1 小时。
 - wechat-oa 提取公众号显示名、公开稳定 `biz_id`、正文外链、图片 URL 清单和稳定哈希，但不访问正文中的官网或 ATS，也不判断企业、招聘批次或岗位。静态页面会识别普通/懒加载图片、`picture`、SVG 图片引用、视频封面和 CSS 背景；显式授权的 Chrome 读取还会在正文内做最长 7 秒的有限滚动观察，不点击或跳转。0.6.0 已实现 Media Evidence、安全图片下载与缓存、本地标准二维码、可替换 Windows OCR、SHA-256 去重编排、单篇文章与发现批次的显式 `--analyze-media` 控制、纯本地 `media doctor`，以及单篇文章的原子 Evidence Bundle；不开启媒体分析时原输出完全不变。Bundle 目标必须不存在，默认保留通过分析的原始图片字节，也可显式选择 metadata-only。发现批次启用后返回外层 schema v2，内嵌原 discovery schema v1，并用 `candidate_index`、`article_identity` 和正文哈希关联媒体证据。派生结果缓存、Discovery Bundle 和 schema-v2 Direct Discovery Request 输入仍未实现。
 - 搜索文本禁止控制字符，单个企业/账号名称提示最多 200 字符，发往搜索后端的组合查询最多 2,000 字符。正文里的文字或链接不能冒充页面级 `biz_id` 和发布时间。
@@ -281,8 +284,8 @@ GIF 解码和标准二维码执行打包自检，并查询 Windows 已安装的 
 
 ```powershell
 .\scripts\build-release.ps1
-.\dist\release\wechat-oa-0.7.0-windows-x64\wechat-oa.exe --version
-Get-FileHash .\dist\release\wechat-oa-0.7.0-windows-x64.zip -Algorithm SHA256
+.\dist\release\wechat-oa-0.7.1-windows-x64\wechat-oa.exe --version
+Get-FileHash .\dist\release\wechat-oa-0.7.1-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。构建脚本不会自动上传 GitHub 或 PyPI；维护者单独核验并发布版本化 Release 资产。
