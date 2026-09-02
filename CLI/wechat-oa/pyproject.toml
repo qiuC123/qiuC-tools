@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wxcli"
-version = "0.5.1"
+version = "0.6.0"
 description = "Windows CLI for WeChat Official Account discovery, evidence, and safe draft preparation"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

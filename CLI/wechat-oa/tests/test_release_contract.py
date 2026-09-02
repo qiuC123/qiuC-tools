@@ -13,6 +13,7 @@ def test_source_and_package_versions_match() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["version"] == __version__
+    assert __version__ == "0.6.0"
     assert project["project"]["scripts"]["wechat-oa"] == "wxcli.cli:main"
     assert project["project"]["scripts"]["wxcli"] == "wxcli.cli:main"
 
@@ -48,6 +49,20 @@ def test_release_contains_install_and_cleanup_guidance() -> None:
     assert "browser policy set never" in instructions
     assert "cache clear" in instructions
     assert "凭据管理器" in instructions
+    assert "wechat-oa-0.6.0-windows-x64.zip" in instructions
+    assert "install-release.ps1 -Version 0.6.0" in instructions
+
+
+def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    media_design = (ROOT / "docs" / "media-evidence.md").read_text(encoding="utf-8")
+
+    assert "wechat-oa-v0.6.0" in readme
+    assert "wechat-oa-0.6.0-windows-x64" in readme
+    assert "0.6.0 已实现" in readme
+    assert "schema-v2 Direct Discovery Request input is deferred" in media_design
+    assert "derived-result caching is deferred" in media_design
+    assert "Discovery Bundle output is deferred" in media_design
 
 
 def test_live_smoke_requires_explicit_flags_and_a_discovery_capable_executable() -> None:

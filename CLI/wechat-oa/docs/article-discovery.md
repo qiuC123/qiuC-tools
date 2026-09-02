@@ -1,6 +1,6 @@
 # WeChat Article Discovery Design
 
-**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; explicit, bounded Discovery media analysis is implemented for the 0.6.0 development line.**
+**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; explicit, bounded Discovery media analysis is included in 0.6.0.**
 
 This document records the wxcli 0.4.0 discovery foundation and its backward-compatible 0.5.0 browser reliability extension. The implementation preserves existing commands, JSON envelopes, exit codes, cache behavior, and read-only safety boundaries. Live Brave, WeChat, and Chrome smoke tests still require separate explicit authorization.
 
@@ -302,7 +302,7 @@ Article discovery, strict candidate handling, ranking, bounded Hydration, Accoun
 
 Durable, user-authorized HTTP-to-Chrome fallback; a local per-invocation prohibition; one visible Browser Run per Hydration batch; retained Browser Session reuse; and a bounded User Action Required outcome for challenges that still need a person. Existing 0.4.0 browser behavior remains compatible, Candidate input cannot authorize Chrome, and no Cookie import or export is added.
 
-### 0.6.0
+### 0.6.0 (implemented)
 
 Standard QR decoding and local-only OCR through replaceable providers. QR payloads are recorded but never opened; possible WeChat Mini Program codes may be identified but are not promised to decode. OCR text remains derived evidence with image origin, confidence, and engine version and never merges into the Article body.
 
@@ -310,7 +310,11 @@ Image processing is limited to HTTPS images referenced by the Article, blocks lo
 
 Article Evidence schema v1 and its hashes remain unchanged. Media Analysis is explicit and produces separately versioned Media Evidence linked by `content_sha256`; Candidate Batch data cannot enable it or choose a filesystem path. Batch limits, local-only processing, Media Cache, partial-result, and atomic Evidence Bundle rules are frozen in [Media Evidence Design](media-evidence.md) and [ADR-0007](adr/0007-keep-media-analysis-separate-from-core-article-evidence.md).
 
-Non-media request and result documents remain schema v1. Media-enabled Direct Discovery Requests and outer results use schema v2, while embedded Article Evidence remains schema v1 and Media Evidence begins with its own schema v1. Candidate Batch input remains schema v1 and can be media-enabled only through a local CLI control.
+Non-media request and result documents remain schema v1. Media-enabled outer results use schema v2,
+while embedded Article Evidence remains schema v1 and Media Evidence begins with its own schema v1.
+Candidate Batch input remains schema v1 and can be media-enabled only through a local CLI control.
+The planned schema-v2 Direct Discovery Request JSON input is deferred from 0.6.0; the existing
+local CLI controls are the supported activation path for this release.
 
 ## Test and acceptance contract
 
