@@ -1,6 +1,6 @@
 # WeChat OA 项目交接说明
 
-## 0.7.0 原生 Exa Direct Discovery（发布准备，2026-09-02）
+## 0.7.0 原生 Exa Direct Discovery 发布收口（2026-09-02）
 
 - 招聘雷达会直接调用 `wechat-oa --json discovery search ... --provider exa --hydrate --no-browser`，不会传递 Exa Key，并会从子进程环境移除 `EXA_API_KEY`。
 - wechat-oa 已增加原生 Exa Provider；Brave 仍是默认值和兼容路径。两个 Key 分别保存在 Windows 凭据管理器，命令参数、JSON、环境、stdout、缓存和 Git 都不承载凭据。
@@ -9,7 +9,9 @@
 - 错误兼容现有顶层类别：未配置和凭据拒绝为 `AUTHENTICATION_ERROR`/退出码 6；限流、超时、网络、上游错误和无效响应为 `NETWORK_ERROR`/退出码 5。调用方用 `error.details.reason` 稳定区分 `not_configured`、`credential_rejected`、`rate_limited`、`timeout`、`network_error`、`provider_error`、`invalid_response`。
 - 空搜索是 `ok: true` 的空候选结果；微信原文回读失败保留 per-candidate `hydration_attempt` 并令 `summary.partial: true`。`published_at`、公众号身份和 Article Evidence 仍只能来自微信原文回读。
 - 普通测试仅使用 MockTransport、fixture、临时 SQLite 和假凭据存储；本轮未调用真实 Exa、微信、Chrome 或账号 API。live smoke 必须由用户另行明确授权。
-- 0.7.0 发布准备验证为 426 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `f8fb9ae666cf8d72179ba93d974af50231740929509e5dd632371ed51408ea4b`。
+- PR #18 已 squash 合入 `main`，合并提交为 `f40ddd7`；远端 Tests and type checks 与 Windows package smoke 均通过。
+- 正式标签 `wechat-oa-v0.7.0` 和 GitHub Release 已发布。0.7.0 验证为 426 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。ZIP SHA-256 为 `f8fb9ae666cf8d72179ba93d974af50231740929509e5dd632371ed51408ea4b`。
+- 已从公开 Release 重新下载 ZIP 和校验文件，实算哈希、发布校验值和固定哈希三者一致。稳定安装与 0.7.0 → 0.6.0 → 0.7.0 双向回滚通过，最终为 `current=0.7.0`、`previous=0.6.0`，canonical Skill 已同步。
 
 ## 0.6.0 发布收口（2026-09-02）
 
