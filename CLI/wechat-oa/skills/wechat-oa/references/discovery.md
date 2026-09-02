@@ -39,9 +39,12 @@ Brave/Exa API Key 只能由用户在交互终端分别运行 `wechat-oa discover
 
 Exa 请求使用 host-only `mp.weixin.qq.com` 域名过滤；命中仍必须通过 wechat-oa 的严格
 HTTPS `mp.weixin.qq.com/s` URL 校验。非 `/s`、其他 host 或带凭据 URL 都不能成为候选。
-company/account 只作为去重后的语义查询提示，不是强制精确短语。日期窗口不会下推成 Exa
-的发布时间硬过滤，以免索引缺少日期时产生零召回；只有微信原文回读得到的 `published_at`
-才能执行可信日期过滤。
+company/account 只作为去重后的语义查询提示，不是强制精确短语。Exa 使用一次有界的
+`auto` 搜索；查询先表达目标公司/公众号偏好，再加入原查询和少量常见校招简称变体。
+完整 Provider 结果页会在候选数量截断前按账号、公司和查询提示重排，明确不匹配的
+`account_hint` 只降权而不删除，原始 Exa rank 继续保存在 provenance。日期窗口不会下推成
+Exa 的发布时间硬过滤，以免索引缺少日期时产生零召回；只有微信原文回读得到的
+`published_at` 才能执行可信日期过滤。上述所有字段仍只是搜索提示，不构成账号或日期证据。
 
 搜索结果只是 `candidates[]`。`title_hint`、`snippet`、`account_hint` 和
 `backend_date_hint` 都来自外部搜索，不能当作微信原文或官方身份依据。本功能是

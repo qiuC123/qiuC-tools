@@ -1,5 +1,14 @@
 # WeChat OA 项目交接说明
 
+## 0.7.2 Exa 候选质量与 Hydration 排序修复（发布准备，2026-09-02）
+
+- 招聘雷达对 0.7.1 做了明确授权的真实复验：零候选缺陷已解除，但已知腾讯原文不在对外 50 条中；前 20 条 Hydration 含大量第三方或其他公司内容，均按契约停在 `VERIFICATION_REQUIRED`，没有打开 Chrome 或生成 Article Evidence。
+- 根因是 Exa 已返回最多 100 条，但 Discovery Service 在完整结果页做本地相关性排序前先截成 50 条；同时旧排序会让“第三方作者、标题提到腾讯和秋招”的内容领先于账号提示未知但标题为腾讯的内容。
+- 修复保持一次 `auto` 搜索：查询先放去重后的公司/账号提示并表达官方公众号偏好，再加入原查询及有界校招词形变体；完整 Provider 结果页在对外候选数量截断前重排。
+- 排序优先账号提示与查询的组合命中；精确或相关账号提示加权，明确不同的账号提示只降权而不删除。原始 Exa rank 继续进入 provenance，任何搜索提示都不成为公众号身份、发布日期或 Article Evidence。
+- 脱敏质量回归模拟真实噪声分布，并把已知腾讯 URL 放在 Exa 原始 rank 80；目标在整页重排后进入前 20 Hydration，第三方结果不消耗该批次的 Hydration 预算。测试不调用真实 Exa、微信或 Chrome。
+- Direct Discovery schema v1、单 JSON envelope、错误码、Windows 凭据所有权、严格 URL 校验、Brave 默认兼容和 `--no-browser` 语义均不变。
+
 ## 0.7.1 Exa Direct Discovery 召回修复（发布收口，2026-09-02）
 
 - 招聘雷达使用 `query="2027届 秋招"`、company/account=`腾讯` 和 2026-06-01 至 2026-09-02 窗口时，0.7.0 Exa 返回成功空结果，但已知存在严格且可回读的公众号文章 URL。
