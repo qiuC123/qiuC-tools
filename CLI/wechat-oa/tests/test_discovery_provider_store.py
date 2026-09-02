@@ -102,7 +102,7 @@ def test_exa_sends_bounded_domain_filtered_query_and_sanitizes_results() -> None
     body = json.loads(observed[0].content)
     assert body == {
         "query": '2027 校园招聘 "Acme"',
-        "includeDomains": ["mp.weixin.qq.com/s"],
+        "includeDomains": ["mp.weixin.qq.com"],
         "numResults": 100,
         "type": "auto",
         "moderation": True,

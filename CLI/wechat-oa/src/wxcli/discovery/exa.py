@@ -46,7 +46,7 @@ class ExaDiscoveryProvider:
             return SearchPage(hits=[], has_more=False)
         payload: dict[str, Any] = {
             "query": _build_query(request),
-            "includeDomains": ["mp.weixin.qq.com/s"],
+            "includeDomains": ["mp.weixin.qq.com"],
             "numResults": min(max(count, 1), _EXA_RESULT_LIMIT),
             "type": "auto",
             "moderation": True,

@@ -147,6 +147,38 @@ def test_provider_page_size_and_name_drive_cached_cursor_continuation(tmp_path) 
     assert provider.calls == []
 
 
+def test_exa_candidates_still_require_strict_wechat_article_urls(tmp_path) -> None:
+    provider = FakeDiscoveryProvider(
+        {
+            0: SearchPage(
+                hits=[
+                    hit(1, "https://mp.weixin.qq.com/s/VALID"),
+                    hit(2, "https://mp.weixin.qq.com/not-an-article"),
+                    hit(3, "https://example.com/s/OTHER-HOST"),
+                    hit(4, "https://user@mp.weixin.qq.com/s/CREDENTIALS"),
+                ],
+                has_more=False,
+            )
+        },
+        name="exa",
+        page_size=100,
+    )
+    service = DiscoveryService(
+        provider,
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        now=lambda: NOW,
+    )
+
+    result = service.search(DiscoveryRequest(query="campus"))
+
+    assert result.search_provider == "exa"
+    assert result.summary.received == 4
+    assert result.summary.accepted == 1
+    assert [item.fetch_url.encoded_string() for item in result.candidates] == [
+        "https://mp.weixin.qq.com/s/VALID"
+    ]
+
+
 def test_invalid_provider_page_size_is_rejected_before_search(tmp_path) -> None:
     provider = FakeDiscoveryProvider({}, page_size=0)
 
