@@ -21,14 +21,14 @@
 
 ### 当前 Git 与发布状态
 
-- 本轮开发分支：`codex/browser-interactive-verification`，基于已经合并 PR #11 的 `main`。
+- 本轮开发分支：`codex/browser-verification-redirect`，基于已经合并 PR #12 的 `main`。
 - 0.5.1 验收提交：`af04cb2 docs: record WeChat OA 0.5.1 acceptance`。
 - 原独立仓库的 `v0.5.1` 指向上述验收提交；monorepo 使用带工具名的发布标签，避免未来多个 CLI 的版本标签冲突。
 - monorepo 发布标签：`wechat-oa-v0.5.1`。该标签指向迁移和发布元数据提交；运行时代码仍对应已经验收的 0.5.1 基线。
 - 本地 `main` 已包含 0.5.1 命名更新、验收记录和本交接文档修正。
 - canonical 源码已迁入 `https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa`；原 `qiuC123/wechat-oa` 暂时保留为迁移兼容仓库，不再作为后续开发目标。
 - 正式发布包通过 GitHub Release 分发；本地 `dist\` 仍被 Git 忽略，不会随源码 push 或 clone 自动传输。
-- SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
+- 已发布 0.5.1 Release 的 SHA-256：`bb348471aea7dac2c1f4e80e4c6a815a509ec584ba09305999f1c08014bd360a`。
 - `main` 已包含 0.6.0 安全图片下载器、原始字节 Media Cache、文章级数量/总字节编排、独立缓存清理命令和打包内置的本地标准二维码分析器，并已处理 PR #2/#3 的全部审阅项。
 - `main` 的 PR #6 已修复 Chrome 在 `domcontentloaded` 后立即截图、静态解析器只识别 `<img>` 导致正文海报漏检的问题；真实文章复验从 4 个页尾图片 URL 提升到 33 个正文/页尾图片 URL，33 张图片全部通过安全下载器下载，Windows 本地 OCR 对 20 张产生非空文本且无引擎失败，真实图片和文字未写入 Git。
 - PR #7 已合并可替换的 `OCRProvider`/`OCRRuntime` 与默认 `WindowsOCRProvider`：重新校验图片字节/哈希/尺寸/像素，最多 64 个重叠长图切片，稀疏结果最多一次受限放大、灰度和自动对比度重试，每次 Windows 进程限时 30 秒；不联网、不纠错，选择的预处理步骤进入 OCR Evidence。固定 PowerShell 桥接使用短期 PNG 和结构化 stdin，Base64 包装 UTF-8 JSON 防止控制台编码损坏，缺少引擎/语言与执行失败保持独立状态。合并前本地完整验证为 344 项 pytest 全绿，mypy 检查 43 个源文件无错误；真实本机合成中文图片字符码核对通过，PyInstaller 双命令发布包及离线冒烟通过。
@@ -37,6 +37,7 @@
 - PR #10 已合并纯本地 `media doctor`：检查 JPEG/PNG/WebP/GIF，执行内存标准 QR 往返自检，通过受限 PowerShell 查询 Windows OCR、安装语言和默认 `zh-Hans` 可用性；不联网、不读凭据/缓存、不启动 Chrome、不安装组件。图片或 QR 缺失令整体失败，Windows OCR 缺失只保留可选能力状态。本地完整验证为 373 项 pytest 全绿，mypy 检查 45 个源文件无错误，canonical Skill 校验通过；开发环境和临时 PyInstaller onedir 中的 `wechat-oa`/`wxcli` 双命令均实测 `overall: pass`，OCR 语言为 `en-US`、`zh-Hans-CN`，默认语言可用。
 - PR #11 已合并发现批次的显式媒体分析：`discovery search --hydrate --analyze-media` 和 `discovery hydrate --input ... --analyze-media` 只分析已经成功生成 Article Evidence 的候选；不开启时原 schema v1 输出与资源构造均不变。开启后返回外层 schema v2，完整保留 Direct Discovery 或 Candidate Ingestion schema v1，并按 `candidate_index`、`article_identity` 和 `content_sha256` 关联独立 Media Evidence。Candidate Batch 不能自行开启媒体分析、选择限额或授权浏览器；批次限额为最多 200 个图片项、400 MiB 下载字节和 1,000,000 个 OCR 字符。本地完整验证为 382 项 pytest 全绿，mypy 检查 46 个源文件无错误，canonical Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
 - 本轮新增 `browser verify ARTICLE_URL` 交互式验证流程，修复自动 fallback 识别验证码后立即关闭 Chrome、调用 Agent 误以为窗口仍在等待的问题。无人值守 fallback 继续立即返回 `VERIFICATION_REQUIRED`；只有用户另行明确授权时，新命令才在专用可见 profile 中打开确切文章并最多等待 5 分钟，只观察页面分类、不点击或绕过验证，成功后直接返回 Article Evidence。canonical Skill 明确禁止使用 computer-use、窗口激活或通用浏览器自动化接管验证窗口。本地完整验证为 387 项 pytest 全绿，mypy 检查 46 个源文件无错误，Skill 校验、PyInstaller spike 和完整 Windows 双命令发布包验收通过。
+- 2026-09-02 的真实文章复验发现微信会把部分验证请求重定向到 `https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha`，该页面可能没有原有文本验证码标记，导致 PR #12 构建误报 `PARSING_ERROR` 并立即关闭 Chrome。本轮热修只把精确 HTTPS 主机 `mp.weixin.qq.com`、无凭据/显式端口、精确路径 `/mp/wappoc_appmsgcaptcha` 识别为验证页；交互命令继续等待用户手动处理，无人值守读取返回 `VERIFICATION_REQUIRED`。本地完整验证为 389 项 pytest 全绿，mypy 检查 46 个源文件无错误，PyInstaller spike 和完整 Windows 双命令发布包通过。未发布的 0.5.1 热修开发包 SHA-256 为 `e95e2a4973d8b119fb032e4a36dc3c94e796cf9afefe0690612711006c979586`；正式发版时应升版本并生成新的 Release，不应覆盖现有 0.5.1 资产。
 
 ### 下一步计划
 
@@ -394,4 +395,4 @@ wechat-oa --json doctor
 .\.venv\Scripts\python.exe -m mypy src
 ```
 
-预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks，当前 `main` 测试 249 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
+预期结果：分支为 `main`，存在 `wechat-oa-v0.5.1` 发布标签，版本为 0.5.1，Doctor 默认不执行 live checks；本轮热修分支测试 389 项通过，mypy 零问题。真实微信/Chrome live smoke 只在用户单独明确授权后执行，不属于默认接手检查。
