@@ -9,6 +9,7 @@
 - 错误兼容现有顶层类别：未配置和凭据拒绝为 `AUTHENTICATION_ERROR`/退出码 6；限流、超时、网络、上游错误和无效响应为 `NETWORK_ERROR`/退出码 5。调用方用 `error.details.reason` 稳定区分 `not_configured`、`credential_rejected`、`rate_limited`、`timeout`、`network_error`、`provider_error`、`invalid_response`。
 - 空搜索是 `ok: true` 的空候选结果；微信原文回读失败保留 per-candidate `hydration_attempt` 并令 `summary.partial: true`。`published_at`、公众号身份和 Article Evidence 仍只能来自微信原文回读。
 - 普通测试仅使用 MockTransport、fixture、临时 SQLite 和假凭据存储；本轮未调用真实 Exa、微信、Chrome 或账号 API。live smoke 必须由用户另行明确授权。
+- 0.7.0 发布准备验证为 426 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `f8fb9ae666cf8d72179ba93d974af50231740929509e5dd632371ed51408ea4b`。
 
 ## 0.6.0 发布收口（2026-09-02）
 
