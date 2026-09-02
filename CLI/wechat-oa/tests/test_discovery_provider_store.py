@@ -14,8 +14,9 @@ from wxcli.discovery.brave import BRAVE_SEARCH_URL, BraveDiscoveryProvider
 from wxcli.discovery.exa import EXA_SEARCH_URL, ExaDiscoveryProvider
 from wxcli.discovery.models import DiscoveryRequest, SearchHit, SearchPage
 from wxcli.discovery.provider import DiscoveryFailureReason
+from wxcli.discovery.service import DiscoveryService
 from wxcli.discovery.store import DiscoveryStore
-from wxcli.errors import ErrorCode, WxcliError
+from wxcli.errors import ErrorCode, VerificationRequiredError, WxcliError
 from wxcli.redaction import redact, redact_text
 
 
@@ -101,13 +102,11 @@ def test_exa_sends_bounded_domain_filtered_query_and_sanitizes_results() -> None
     assert observed[0].headers["x-api-key"] == "example-secret"
     body = json.loads(observed[0].content)
     assert body == {
-        "query": '2027 校园招聘 "Acme"',
+        "query": "2027 校园招聘 Acme",
         "includeDomains": ["mp.weixin.qq.com"],
         "numResults": 100,
         "type": "auto",
         "moderation": True,
-        "startPublishedDate": "2026-01-01T00:00:00.000Z",
-        "endPublishedDate": "2026-12-31T23:59:59.999Z",
     }
     assert page.has_more is False
     assert page.next_offset is None
@@ -118,6 +117,75 @@ def test_exa_sends_bounded_domain_filtered_query_and_sanitizes_results() -> None
     assert "provider-result-id" not in serialized
     assert "must not escape" not in serialized
     assert "request-id-must-not-escape" not in serialized
+
+
+def test_exa_recall_hints_do_not_become_hard_filters_for_known_article(
+    tmp_path,
+) -> None:
+    known_url = "https://mp.weixin.qq.com/s/Fn8umHSk_LdZ6lz4YPa5Rg"
+    observed_bodies: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed_bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "title": "顶尖人才寻人启事｜青云计划2027校招全面启动",
+                        "url": known_url,
+                        "author": "腾讯",
+                        "id": "mock-provider-result",
+                    }
+                ]
+            },
+        )
+
+    class VerificationPage:
+        def get(self, url: str, expected_accounts: object) -> object:
+            assert url == known_url
+            raise VerificationRequiredError()
+
+    request = DiscoveryRequest(
+        query="2027届 秋招",
+        companies=["腾讯"],
+        expected_accounts=[
+            {"biz_id": "MzA3NDEyMDgzMw==", "display_names": ["腾讯"]}
+        ],
+        published_after="2026-06-01",
+        published_before="2026-09-02",
+        hydrate=True,
+        allow_browser=False,
+    )
+    provider = ExaDiscoveryProvider(
+        httpx.Client(transport=httpx.MockTransport(handler)),
+        "key",
+    )
+    result = DiscoveryService(
+        provider,
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        http_evidence=VerificationPage(),  # type: ignore[arg-type]
+    ).search(request)
+
+    assert observed_bodies == [
+        {
+            "query": "2027届 秋招 腾讯",
+            "includeDomains": ["mp.weixin.qq.com"],
+            "numResults": 100,
+            "type": "auto",
+            "moderation": True,
+        }
+    ]
+    assert result.summary.received == 1
+    assert result.summary.accepted == 1
+    assert result.summary.partial is True
+    assert len(result.candidates) == 1
+    candidate = result.candidates[0]
+    assert candidate.fetch_url.encoded_string() == known_url
+    assert candidate.search_provenance.provider == "exa"
+    assert candidate.backend_date_hint is None
+    assert candidate.evidence is None
+    assert candidate.verification_status == "verification_required"
 
 
 def test_exa_has_one_bounded_page_and_filters_malformed_items() -> None:

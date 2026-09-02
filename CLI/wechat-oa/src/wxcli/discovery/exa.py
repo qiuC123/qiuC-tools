@@ -51,13 +51,6 @@ class ExaDiscoveryProvider:
             "type": "auto",
             "moderation": True,
         }
-        if request.published_after:
-            payload["startPublishedDate"] = _date_boundary(request.published_after)
-        if request.published_before:
-            payload["endPublishedDate"] = _date_boundary(
-                request.published_before,
-                end_of_day=True,
-            )
         response = self._request(payload)
         try:
             response_payload = response.json()
@@ -163,11 +156,18 @@ class ExaDiscoveryProvider:
 
 
 def _build_query(request: DiscoveryRequest) -> str:
-    terms = [request.query]
-    terms.extend(f'"{value}"' for value in request.companies)
+    terms = [request.query, *request.companies]
     for account in request.expected_accounts:
-        terms.extend(f'"{value}"' for value in account.display_names)
-    return " ".join(terms)
+        terms.extend(account.display_names)
+    unique_terms: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        identity = " ".join(term.split()).casefold()
+        if identity in seen:
+            continue
+        seen.add(identity)
+        unique_terms.append(term)
+    return " ".join(unique_terms)
 
 
 def _optional_string(value: object, maximum: int) -> str | None:
@@ -185,13 +185,6 @@ def _date_hint(value: Mapping[str, Any]) -> date | None:
         return date.fromisoformat(raw[:10])
     except ValueError:
         return None
-
-
-def _date_boundary(value: date, *, end_of_day: bool = False) -> str:
-    time = "23:59:59.999Z" if end_of_day else "00:00:00.000Z"
-    return f"{value.isoformat()}T{time}"
-
-
 def _retry_after(response: httpx.Response) -> float:
     try:
         return min(max(float(response.headers.get("Retry-After", "1")), 0.0), 30.0)
