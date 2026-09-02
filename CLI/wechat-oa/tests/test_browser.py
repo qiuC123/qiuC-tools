@@ -430,6 +430,55 @@ def test_interactive_verification_waits_for_wechat_captcha_redirect(
     assert document.article.title == "Verified"
 
 
+def test_interactive_verification_retries_while_article_page_is_navigating(
+    tmp_path: Path,
+) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+
+    class NavigatingPage(FakePage):
+        url = "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?target=redacted"
+        content_calls = 0
+
+        def content(self) -> str:
+            self.content_calls += 1
+            if self.content_calls == 1:
+                return "<p>challenge shell</p>"
+            if self.content_calls == 2:
+                raise PlaywrightError(
+                    "Page.content: Unable to retrieve content because the page is "
+                    "navigating and changing the content."
+                )
+            return '<h1 id="activity-name">Verified</h1><div id="js_content">正文</div>'
+
+        def wait_for_timeout(self, _: int) -> None:
+            self.url = "https://mp.weixin.qq.com/s/T1"
+
+    page = NavigatingPage()
+
+    class NavigatingContext(FakeContext):
+        def new_page(self) -> NavigatingPage:
+            return page
+
+    class NavigatingChromium:
+        def launch_persistent_context(self, **_: object) -> NavigatingContext:
+            return NavigatingContext()
+
+    class NavigatingPlaywright(FakePlaywright):
+        chromium = NavigatingChromium()
+
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=NavigatingPlaywright,
+        chrome_path=chrome,
+    )
+
+    document = provider.get_document_interactive("https://mp.weixin.qq.com/s/T1")
+
+    assert document.article.title == "Verified"
+    assert page.content_calls >= 3
+
+
 def test_unattended_chrome_classifies_wechat_captcha_redirect_as_verification(
     tmp_path: Path,
 ) -> None:

@@ -206,6 +206,8 @@ class ChromeRun:
                             required_action="run_browser_login",
                             verification_outcome="window_closed",
                         ) from error
+                    if _page_is_navigating(error):
+                        continue
                     raise WxcliError(
                         ErrorCode.CHROME_ERROR,
                         "Chrome could not continue the interactive verification session.",
@@ -387,6 +389,10 @@ class ChromeEvidenceService(EvidenceService):
 def _page_is_closed(page: Any) -> bool:
     is_closed = getattr(page, "is_closed", None)
     return bool(is_closed()) if callable(is_closed) else False
+
+
+def _page_is_navigating(error: PlaywrightError) -> bool:
+    return "page is navigating and changing the content" in str(error).casefold()
 
 
 def _is_wechat_verification_page(page: Any) -> bool:
