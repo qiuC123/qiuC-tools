@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Private models, media, generated data and local configuration are excluded
+# for the whole subproject by ../.gitignore.
