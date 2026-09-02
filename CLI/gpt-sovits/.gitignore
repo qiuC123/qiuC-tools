@@ -41,4 +41,3 @@ cache/
 !.env.example
 reference-prompt.json
 private-prompt-manifest.json
-
