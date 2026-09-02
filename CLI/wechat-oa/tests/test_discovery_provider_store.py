@@ -102,11 +102,27 @@ def test_exa_sends_bounded_domain_filtered_query_and_sanitizes_results() -> None
     assert observed[0].headers["x-api-key"] == "example-secret"
     body = json.loads(observed[0].content)
     assert body == {
-        "query": "Acme 官方公众号 2027 校园招聘 校招",
+        "query": (
+            "优先查找由“Acme”微信公众号直接发布的文章。"
+            "主题：2027 校园招聘 校招。"
+            "发布时间约在 2026-01-01 至 2026-12-31。"
+        ),
+        "additionalQueries": [
+            "Acme 2027 校园招聘",
+            "Acme 校招",
+            "Acme 2027 人才计划 校招 校园招聘",
+            "Acme 2027 校园招聘 2026年发布",
+        ],
         "includeDomains": ["mp.weixin.qq.com"],
         "numResults": 100,
-        "type": "auto",
+        "type": "deep",
         "moderation": True,
+        "systemPrompt": (
+            "Prioritize direct articles published by the requested WeChat Official Account "
+            "or company that match the complete topic and approximate publication window. "
+            "Deprioritize other organizations, aggregators, reposts, interview stories, and "
+            "generic roundups. Treat dates as soft retrieval guidance, not hard filters."
+        ),
     }
     assert page.has_more is False
     assert page.next_offset is None
@@ -169,11 +185,27 @@ def test_exa_recall_hints_do_not_become_hard_filters_for_known_article(
 
     assert observed_bodies == [
         {
-            "query": "腾讯 官方公众号 2027届 秋招 2027 校招 校园招聘 秋季招聘",
+            "query": (
+                "优先查找由“腾讯”微信公众号直接发布的文章。"
+                "主题：2027届 秋招 2027 校招 校园招聘 秋季招聘。"
+                "发布时间约在 2026-06-01 至 2026-09-02。"
+            ),
+            "additionalQueries": [
+                "腾讯 2027届 秋招",
+                "腾讯 2027 校招 校园招聘 秋季招聘",
+                "腾讯 2027 人才计划 校招 校园招聘",
+                "腾讯 2027届 秋招 2026年发布",
+            ],
             "includeDomains": ["mp.weixin.qq.com"],
             "numResults": 100,
-            "type": "auto",
+            "type": "deep",
             "moderation": True,
+            "systemPrompt": (
+                "Prioritize direct articles published by the requested WeChat Official Account "
+                "or company that match the complete topic and approximate publication window. "
+                "Deprioritize other organizations, aggregators, reposts, interview stories, and "
+                "generic roundups. Treat dates as soft retrieval guidance, not hard filters."
+            ),
         }
     ]
     assert result.summary.received == 1

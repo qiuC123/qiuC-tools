@@ -11,6 +11,9 @@ from wxcli.errors import ValidationError
 from wxcli.public_url import validate_public_url
 
 
+EXA_DISCOVERY_STRATEGY_VERSION = "deep-multi-query-v1"
+
+
 def article_identity(value: str) -> tuple[str, str]:
     """Return the strict fetch URL and stable article identity."""
     normalized = validate_public_url(value)
@@ -42,6 +45,8 @@ def query_fingerprint(request: DiscoveryRequest, provider: str = "brave") -> str
         "published_after": request.published_after.isoformat() if request.published_after else None,
         "published_before": request.published_before.isoformat() if request.published_before else None,
     }
+    if provider == "exa":
+        payload["provider_strategy_version"] = EXA_DISCOVERY_STRATEGY_VERSION
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 

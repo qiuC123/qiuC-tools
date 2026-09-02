@@ -13,7 +13,7 @@ def test_source_and_package_versions_match() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["version"] == __version__
-    assert __version__ == "0.7.2"
+    assert __version__ == "0.7.3"
     assert project["project"]["scripts"]["wechat-oa"] == "wxcli.cli:main"
     assert project["project"]["scripts"]["wxcli"] == "wxcli.cli:main"
 
@@ -49,8 +49,8 @@ def test_release_contains_install_and_cleanup_guidance() -> None:
     assert "browser policy set never" in instructions
     assert "cache clear" in instructions
     assert "凭据管理器" in instructions
-    assert "wechat-oa-0.7.2-windows-x64.zip" in instructions
-    assert "install-release.ps1 -Version 0.7.2" in instructions
+    assert "wechat-oa-0.7.3-windows-x64.zip" in instructions
+    assert "install-release.ps1 -Version 0.7.3" in instructions
 
 
 def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
@@ -63,36 +63,36 @@ def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
     assert "Discovery Bundle output is deferred" in media_design
 
 
-def test_072_release_scope_includes_native_exa_without_schema_break() -> None:
+def test_073_release_scope_includes_native_exa_without_schema_break() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     discovery = (ROOT / "docs" / "article-discovery.md").read_text(encoding="utf-8")
 
-    assert "wechat-oa-v0.7.2" in readme
-    assert "wechat-oa-0.7.2-windows-x64" in readme
+    assert "wechat-oa-v0.7.3" in readme
+    assert "wechat-oa-0.7.3-windows-x64" in readme
     assert "--provider exa --hydrate --no-browser" in readme
     assert "Direct Discovery result remains schema v1" in discovery
     assert 'includeDomains: ["mp.weixin.qq.com"]' in discovery
 
 
-def test_skill_install_source_is_pinned_to_published_072_release() -> None:
+def test_skill_install_source_is_pinned_to_published_073_release() -> None:
     operations = (
         ROOT / "skills" / "wechat-oa" / "references" / "operations.md"
     ).read_text(encoding="utf-8")
     release_base = (
         "https://github.com/qiuC123/qiuC-tools/releases/download/"
-        "wechat-oa-v0.7.2/wechat-oa-0.7.2-windows-x64.zip"
+        "wechat-oa-v0.7.3/wechat-oa-0.7.3-windows-x64.zip"
     )
     published_hash = (
-        "fd739fd0846effb0f0de02063cc5d60c"
-        "3e1335a1cc65b476b3d6bffbe5c6cfaa"
+        "be6c85c404f431af654ca6f1da7d07e6"
+        "22e9ea9a66947811315043a3c2b8daaf"
     )
 
-    assert "releases/tag/wechat-oa-v0.7.2" in operations
+    assert "releases/tag/wechat-oa-v0.7.3" in operations
     assert release_base in operations
     assert f"{release_base}.sha256" in operations
     assert operations.count(published_hash) == 2
-    assert "wechat-oa-0.7.2-windows-x64\\wechat-oa.exe" in operations
-    assert "0.7.1-windows-x64" not in operations
+    assert "wechat-oa-0.7.3-windows-x64\\wechat-oa.exe" in operations
+    assert "0.7.2-windows-x64" not in operations
 
 
 def test_live_smoke_requires_explicit_flags_and_a_discovery_capable_executable() -> None:
