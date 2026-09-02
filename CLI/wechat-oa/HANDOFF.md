@@ -1,5 +1,15 @@
 # WeChat OA 项目交接说明
 
+## 0.7.0 原生 Exa Direct Discovery（开发中，2026-09-02）
+
+- 招聘雷达会直接调用 `wechat-oa --json discovery search ... --provider exa --hydrate --no-browser`，不会传递 Exa Key，并会从子进程环境移除 `EXA_API_KEY`。
+- wechat-oa 已增加原生 Exa Provider；Brave 仍是默认值和兼容路径。两个 Key 分别保存在 Windows 凭据管理器，命令参数、JSON、环境、stdout、缓存和 Git 都不承载凭据。
+- Exa 请求使用 host-only `includeDomains: ["mp.weixin.qq.com"]`。命中仍只是候选，随后必须通过严格 HTTPS `mp.weixin.qq.com/s` URL 校验；非 `/s`、其他 host 和带凭据 URL 均被丢弃。
+- Direct Discovery 输出继续使用 schema v1，外层继续是单个 UTF-8 JSON envelope。候选 provenance 明确包含 `provider: "exa"`、`rank` 和脱敏稳定 `result_id`。
+- 错误兼容现有顶层类别：未配置和凭据拒绝为 `AUTHENTICATION_ERROR`/退出码 6；限流、超时、网络、上游错误和无效响应为 `NETWORK_ERROR`/退出码 5。调用方用 `error.details.reason` 稳定区分 `not_configured`、`credential_rejected`、`rate_limited`、`timeout`、`network_error`、`provider_error`、`invalid_response`。
+- 空搜索是 `ok: true` 的空候选结果；微信原文回读失败保留 per-candidate `hydration_attempt` 并令 `summary.partial: true`。`published_at`、公众号身份和 Article Evidence 仍只能来自微信原文回读。
+- 普通测试仅使用 MockTransport、fixture、临时 SQLite 和假凭据存储；本轮未调用真实 Exa、微信、Chrome 或账号 API。live smoke 必须由用户另行明确授权。
+
 ## 0.6.0 发布收口（2026-09-02）
 
 - canonical `main` 已通过 PR #15 合入单篇文章原子 Evidence Bundle，合并提交为
@@ -373,7 +383,7 @@ build\packaged-live-acceptance-0.4.0\agent-end-to-end-browser-fixed.json
 
 ### 文档提示
 
-`docs/release-windows.md` 中“首次使用文章发现时配置 Brave”的描述只适用于 Direct Discovery。Agent-first 使用 Exa 时不需要 Brave Key，后续文档整理时可进一步把这一点写得更醒目。
+`docs/release-windows.md` 现在明确按所选 Direct Discovery Provider 配置 Brave 或 Exa；Agent-first Candidate Batch 路径仍不需要向 wechat-oa 传递搜索 Key。
 
 ## 8. 当时建议的下一步
 
