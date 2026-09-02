@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, cast
+from urllib.parse import urlsplit
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
@@ -33,6 +34,7 @@ MEDIA_SCAN_MAX_STEPS = 80
 MEDIA_SCAN_STABLE_ROUNDS = 3
 MEDIA_SCAN_MAX_ELEMENTS = 2_000
 MEDIA_SCAN_MAX_IMAGES = 200
+_WECHAT_VERIFICATION_PATHS = frozenset({"/mp/wappoc_appmsgcaptcha"})
 
 _ARTICLE_MEDIA_SCAN_SCRIPT = r"""
 async ({ maxSteps, pauseMs, stableRounds, maxElements, maxImages }) => {
@@ -172,7 +174,10 @@ class ChromeRun:
                 ) from error
 
             kind = self._provider.classifier.classify(html)
-            while kind is PageKind.VERIFICATION and wait_for_verification:
+            requires_verification = (
+                kind is PageKind.VERIFICATION or _is_wechat_verification_page(page)
+            )
+            while requires_verification and wait_for_verification:
                 remaining_ms = int((self._deadline - self._monotonic()) * 1000)
                 if remaining_ms <= 0:
                     raise VerificationRequiredError(
@@ -206,7 +211,11 @@ class ChromeRun:
                         "Chrome could not continue the interactive verification session.",
                     ) from error
                 kind = self._provider.classifier.classify(html)
-            if kind is PageKind.VERIFICATION:
+                requires_verification = (
+                    kind is PageKind.VERIFICATION
+                    or _is_wechat_verification_page(page)
+                )
+            if requires_verification:
                 raise VerificationRequiredError(
                     verification_stage="browser",
                     required_action="run_browser_login",
@@ -378,3 +387,22 @@ class ChromeEvidenceService(EvidenceService):
 def _page_is_closed(page: Any) -> bool:
     is_closed = getattr(page, "is_closed", None)
     return bool(is_closed()) if callable(is_closed) else False
+
+
+def _is_wechat_verification_page(page: Any) -> bool:
+    value = getattr(page, "url", "")
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.casefold() == "https"
+        and (parsed.hostname or "").casefold() == "mp.weixin.qq.com"
+        and parsed.username is None
+        and parsed.password is None
+        and port is None
+        and parsed.path in _WECHAT_VERIFICATION_PATHS
+    )

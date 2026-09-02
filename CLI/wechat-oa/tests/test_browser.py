@@ -389,6 +389,82 @@ def test_interactive_verification_waits_for_exact_article_and_returns_document(
     assert profile.status().last_successful_read_at is not None
 
 
+def test_interactive_verification_waits_for_wechat_captcha_redirect(
+    tmp_path: Path,
+) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+
+    class RedirectedPage(FakePage):
+        url = "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?target=redacted"
+
+        def content(self) -> str:
+            if "wappoc_appmsgcaptcha" in self.url:
+                return "<p>unexpected challenge shell without text markers</p>"
+            return '<h1 id="activity-name">Verified</h1><div id="js_content">正文</div>'
+
+        def wait_for_timeout(self, _: int) -> None:
+            self.url = "https://mp.weixin.qq.com/s/T1"
+
+    page = RedirectedPage()
+
+    class RedirectedContext(FakeContext):
+        def new_page(self) -> RedirectedPage:
+            return page
+
+    class RedirectedChromium:
+        def launch_persistent_context(self, **_: object) -> RedirectedContext:
+            return RedirectedContext()
+
+    class RedirectedPlaywright(FakePlaywright):
+        chromium = RedirectedChromium()
+
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=RedirectedPlaywright,
+        chrome_path=chrome,
+    )
+
+    document = provider.get_document_interactive("https://mp.weixin.qq.com/s/T1")
+
+    assert document.article.title == "Verified"
+
+
+def test_unattended_chrome_classifies_wechat_captcha_redirect_as_verification(
+    tmp_path: Path,
+) -> None:
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"stub")
+
+    class RedirectedPage(FakePage):
+        url = "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?target=redacted"
+
+        def content(self) -> str:
+            return "<p>unexpected challenge shell without text markers</p>"
+
+    class RedirectedContext(FakeContext):
+        def new_page(self) -> RedirectedPage:
+            return RedirectedPage()
+
+    class RedirectedChromium:
+        def launch_persistent_context(self, **_: object) -> RedirectedContext:
+            return RedirectedContext()
+
+    class RedirectedPlaywright(FakePlaywright):
+        chromium = RedirectedChromium()
+
+    provider = ChromeProvider(
+        BrowserProfile(tmp_path / "profile", tmp_path / "state.json"),
+        playwright_factory=RedirectedPlaywright,
+        chrome_path=chrome,
+    )
+
+    with pytest.raises(WxcliError) as raised:
+        provider.get_document("https://mp.weixin.qq.com/s/T1")
+
+    assert raised.value.code is ErrorCode.VERIFICATION_REQUIRED
+
+
 def test_interactive_verification_reports_closed_window(tmp_path: Path) -> None:
     chrome = tmp_path / "chrome.exe"
     chrome.write_bytes(b"stub")
