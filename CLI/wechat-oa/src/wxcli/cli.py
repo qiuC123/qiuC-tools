@@ -33,6 +33,7 @@ from wxcli.errors import ErrorCode, ExitCode, InputError, ValidationError, Wxcli
 from wxcli.evidence import ArticleEvidence, EvidenceService, build_article_evidence
 from wxcli.discovery.auth import DiscoverySecretStore
 from wxcli.discovery.brave import BraveDiscoveryProvider
+from wxcli.discovery.exa import ExaDiscoveryProvider
 from wxcli.discovery.ingestion import CandidateIngestionService
 from wxcli.discovery.media import (
     DiscoveryMediaAnalysisResult,
@@ -47,6 +48,11 @@ from wxcli.discovery.models import (
     DiscoveryResult,
 )
 from wxcli.discovery.service import DiscoveryService, validate_discovery_tokens
+from wxcli.discovery.provider import (
+    DiscoveryFailureReason,
+    DiscoveryProviderName,
+    normalize_discovery_provider,
+)
 from wxcli.discovery.store import DiscoveryStore
 from wxcli.media import (
     ArticleMediaAnalyzer,
@@ -546,6 +552,11 @@ def discovery_search(
     context: typer.Context,
     query: str | None = typer.Argument(None, help="Keywords used to discover WeChat articles."),
     input_path: str | None = typer.Option(None, "--input", help="Schema-v1 JSON file, or - for stdin."),
+    provider: str = typer.Option(
+        "brave",
+        "--provider",
+        help="Direct search provider: brave or exa.",
+    ),
     company: list[str] | None = typer.Option(None, "--company", help="Repeatable company-name hint."),
     account: list[str] | None = typer.Option(None, "--account", help="Repeatable account-name hint."),
     published_after: str | None = typer.Option(None, "--published-after", help="Earliest YYYY-MM-DD."),
@@ -578,6 +589,7 @@ def discovery_search(
 ) -> None:
     """Discover candidates and optionally hydrate selected WeChat articles."""
     output = _output(context)
+    provider_name = normalize_discovery_provider(provider)
     if input_path is not None and _has_explicit_discovery_search_options(context):
         raise InputError("--input cannot be combined with query or search options.")
     request = _discovery_request(
@@ -611,10 +623,17 @@ def discovery_search(
     request = request.model_copy(
         update={"allow_browser": request.hydrate and decision.allows_fallback}
     )
-    validate_discovery_tokens(request)
-    api_key = default_discovery_secrets().get_brave_api_key()
+    validate_discovery_tokens(request, provider_name)
+    api_key = default_discovery_secrets().get_api_key(provider_name)
     if not api_key:
-        raise WxcliError(ErrorCode.AUTHENTICATION_ERROR, "The Brave API key is not configured.")
+        raise WxcliError(
+            ErrorCode.AUTHENTICATION_ERROR,
+            f"The {provider_name.title()} API key is not configured.",
+            {
+                "provider": provider_name,
+                "reason": DiscoveryFailureReason.NOT_CONFIGURED,
+            },
+        )
     with httpx.Client(timeout=30.0) as client:
         http_evidence = (
             EvidenceService(PublicHttpProvider(client, default_cache())) if request.hydrate else None
@@ -626,8 +645,9 @@ def discovery_search(
             if request.allow_browser
             else None
         )
+        direct_provider = _direct_discovery_provider(client, provider_name, api_key)
         service = DiscoveryService(
-            BraveDiscoveryProvider(client, api_key),
+            direct_provider,
             default_discovery_store(),
             http_evidence=http_evidence,
             browser_evidence=browser_evidence,
@@ -723,12 +743,17 @@ def discovery_auth_configure(
 ) -> None:
     """Interactively store one discovery credential in Windows Credential Manager."""
     output = _output(context)
-    _require_brave(provider)
+    provider_name = normalize_discovery_provider(provider)
     if output.json_mode or not is_interactive():
         raise InputError("Discovery credential setup requires an interactive terminal.")
-    api_key = typer.prompt("Brave API key", hide_input=True, confirmation_prompt=True, err=True)
-    default_discovery_secrets().set_brave_api_key(api_key)
-    output.success({"provider": "brave", "configured": True})
+    api_key = typer.prompt(
+        f"{provider_name.title()} API key",
+        hide_input=True,
+        confirmation_prompt=True,
+        err=True,
+    )
+    default_discovery_secrets().set_api_key(provider_name, api_key)
+    output.success({"provider": provider_name, "configured": True})
 
 
 @discovery_auth_app.command("status")
@@ -736,13 +761,14 @@ def discovery_auth_status(
     context: typer.Context,
     provider: str = typer.Option("brave", "--provider"),
 ) -> None:
-    """Report only whether the Brave credential exists."""
+    """Report only whether the selected discovery credential exists."""
     output = _output(context)
-    _require_brave(provider)
+    provider_name = normalize_discovery_provider(provider)
     output.success(
         {
-            "provider": "brave",
-            "configured": default_discovery_secrets().get_brave_api_key() is not None,
+            "provider": provider_name,
+            "configured": default_discovery_secrets().get_api_key(provider_name)
+            is not None,
         }
     )
 
@@ -1150,9 +1176,14 @@ def _output(context: typer.Context) -> Output:
     return output
 
 
-def _require_brave(provider: str) -> None:
-    if provider.casefold() != "brave":
-        raise ValidationError("Only the brave discovery provider is supported in WeChat OA 0.5.x.")
+def _direct_discovery_provider(
+    client: httpx.Client,
+    provider: DiscoveryProviderName,
+    api_key: str,
+) -> BraveDiscoveryProvider | ExaDiscoveryProvider:
+    if provider == "exa":
+        return ExaDiscoveryProvider(client, api_key)
+    return BraveDiscoveryProvider(client, api_key)
 
 
 def _has_explicit_discovery_search_options(context: typer.Context) -> bool:

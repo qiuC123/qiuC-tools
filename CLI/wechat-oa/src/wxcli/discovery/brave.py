@@ -18,6 +18,7 @@ BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
 class BraveDiscoveryProvider:
     name = "brave"
+    page_size = 20
 
     def __init__(
         self,

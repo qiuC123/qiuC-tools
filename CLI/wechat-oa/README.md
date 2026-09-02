@@ -2,7 +2,7 @@
 
 Canonical source: [`qiuC-tools/CLI/wechat-oa`](https://github.com/qiuC123/qiuC-tools/tree/main/CLI/wechat-oa).
 Windows x64 downloads are published under namespaced tags such as
-[`wechat-oa-v0.6.0`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.6.0).
+[`wechat-oa-v0.7.0`](https://github.com/qiuC123/qiuC-tools/releases/tag/wechat-oa-v0.7.0).
 
 `wechat-oa` 是一个仅支持 Windows 的微信公众号命令行工具。它可以通过外部搜索发现微信公众号文章，再读取公众号原文并生成通用证据；也可以读取已知公开文章、本地 HTML/Markdown 文件、草稿箱和已发布图文。它还支持把 Word 正文和单独封面映射成未发布草稿。已有草稿只能经过“备份、比较、生成计划、显式确认”流程安全替换；它不会发布、群发或删除内容。
 
@@ -12,6 +12,9 @@ Windows x64 downloads are published under namespaced tags such as
 Windows OCR、发现批次媒体分析、Media Doctor 和单篇文章 Evidence Bundle。schema-v2
 Direct Discovery Request JSON 输入、Discovery Bundle 和 QR/OCR 派生结果缓存明确延期，
 不阻塞本版本发布。
+
+0.7.0 新增原生 Exa Direct Discovery，并保留 Brave 默认兼容路径；Direct Discovery
+schema v1、单 JSON envelope、候选与微信原文证据边界均保持不变。
 
 ## 环境与开发安装
 
@@ -86,12 +89,18 @@ wechat-oa --json article evidence "https://mp.weixin.qq.com/s/example" `
 wechat-oa --json article evidence "https://mp.weixin.qq.com/s/example" `
   --analyze-media --bundle .\article-evidence-metadata --bundle-metadata-only
 
-# 首次使用发现功能时，交互式把 Brave API Key 存入 Windows 凭据管理器
+# 首次使用对应发现后端时，交互式把 API Key 存入 Windows 凭据管理器
 wechat-oa discovery auth configure --provider brave
 wechat-oa --json discovery auth status --provider brave
+wechat-oa discovery auth configure --provider exa
+wechat-oa --json discovery auth status --provider exa
 
 # 只发现候选，不访问候选微信页面
 wechat-oa --json discovery search "2027 校园招聘" --company "示例公司" --account "示例招聘"
+
+# 原生 Exa Direct Discovery；默认仍是 Brave
+wechat-oa --json discovery search "2027 校园招聘" --company "示例公司" `
+  --account "示例招聘" --provider exa --hydrate --no-browser
 
 # 显式读取分级选中的公众号原文；一次性回退只在 HTTP 验证页后打开 Chrome
 wechat-oa --json discovery search "2027 校园招聘" --hydrate
@@ -175,9 +184,9 @@ wechat-oa doctor --allow-live-api
 
 ## 微信文章发现与证据
 
-- Agent-first 路径由 Codex CLI 配合 Agent Reach/Exa 生成 Candidate Batch，再交给 `discovery hydrate`。wechat-oa 不读取 Exa 凭证，也不把 Agent 的判断当成证据。Candidate Batch 最多 100 条、2 MiB，未知字段一律拒绝。
+- 调用方可选择两条路径：直接运行 `discovery search --provider exa|brave`，或由 Codex CLI 配合 Agent Reach/Exa 生成 Candidate Batch 后交给 `discovery hydrate`。原生 Direct Discovery 的 Key 由 wechat-oa 自己保存在 Windows 凭据管理器；Candidate Batch 路径仍不向 wechat-oa 传递外部搜索凭证。两条路径都不把搜索判断当成证据。Candidate Batch 最多 100 条、2 MiB，未知字段一律拒绝。
 - Candidate Batch 不能授权浏览器。默认长期策略为 `never`；用户可以本地追加 `--browser-fallback`、使用可信 Direct Discovery Request 的本次授权，或明确设置长期 `auto-fallback`。`--no-browser` 对本次调用拥有最高优先级。
-- `discovery search` 使用 Brave Web Search，并强制加入 `site:mp.weixin.qq.com/s`。它是“微信公众号文章发现”，不是微信官方搜索，也不承诺全微信、全量或实时无延迟。
+- `discovery search` 默认使用 Brave Web Search，也可显式选择原生 Exa。Brave 强制加入 `site:mp.weixin.qq.com/s`；Exa 只把 `mp.weixin.qq.com` 作为上游域名过滤，所有命中随后仍必须通过 wechat-oa 的严格 HTTPS `/s` 文章 URL 校验。它是“微信公众号文章发现”，不是微信官方搜索，也不承诺全微信、全量或实时无延迟。
 - 搜索命中始终只是 Candidate。只有 `--hydrate` 成功读取真实微信原文后才会产生 Article Evidence；失败会保留为安全的 `hydration_attempt`，不会用搜索摘要伪造正文。
 - 默认最多返回 50 个候选。启用原文读取后，排序前 10 条必须尝试，其余按通用理由选择，单次最多尝试 20 条。单篇失败会令 `partial: true`，但不会让整个成功搜索使用非零退出码。
 - `published_at` 只来自微信原文；搜索后端的日期只写入 `backend_date_hint`。`discovered_at`、`published_at`、`last_successful_read_at` 和旧版迁移时间含义不同。
@@ -237,7 +246,7 @@ https://mp.weixin.qq.com/s?__biz=...&mid=...
 - 所有 Provider 都是只读的；写操作只存在于独立草稿写入器中，并且必须是显式确认的新建，或经过冻结计划与远端指纹复核的草稿替换。
 - 不发布、不群发、不删除草稿或公众号内容，也不点赞或评论。
 - 不绕过验证码，不导出 Cookie，也不会把浏览器 Cookie 放入命令输出或缓存。
-- AppID 存在普通本地配置中；AppSecret、Access Token 和 discovery 专用 Brave API Key 存在 Windows 凭据管理器中。发现状态库不保存凭证或认证头。
+- AppID 存在普通本地配置中；AppSecret、Access Token 和 discovery 专用 Brave/Exa API Key 分别存在 Windows 凭据管理器中。发现状态库不保存凭证或认证头，也不读取 `EXA_API_KEY` 环境变量。
 - 不要把 AppSecret、Token 或 Cookie 放在命令参数、日志、问题报告或 Git 文件中。
 - `auth test` 不会强制刷新尚未过期的 Token。
 - `doctor` 和 `auth test` 只有收到 `--allow-live-api` 明确授权后，才会执行真实微信网络/账号检查。
@@ -272,8 +281,8 @@ GIF 解码和标准二维码执行打包自检，并查询 Windows 已安装的 
 
 ```powershell
 .\scripts\build-release.ps1
-.\dist\release\wechat-oa-0.6.0-windows-x64\wechat-oa.exe --version
-Get-FileHash .\dist\release\wechat-oa-0.6.0-windows-x64.zip -Algorithm SHA256
+.\dist\release\wechat-oa-0.7.0-windows-x64\wechat-oa.exe --version
+Get-FileHash .\dist\release\wechat-oa-0.7.0-windows-x64.zip -Algorithm SHA256
 ```
 
 正式构建要求 Git 工作树干净。安装、升级和彻底清理步骤见 [Windows 发布说明](docs/release-windows.md)。构建脚本不会自动上传 GitHub 或 PyPI；维护者单独核验并发布版本化 Release 资产。

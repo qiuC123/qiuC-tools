@@ -15,8 +15,8 @@ Get-Content candidates.json | wechat-oa --json discovery hydrate --input -
 
 该命令负责批量 schema 校验、严格 URL 校验、去重、候选历史和受限 Hydration。输入最多
 100 个候选和 2 MiB；默认前 10 条优先尝试，最多读取 20 篇公众号原文。批次不能携带 API Key、
-Cookie、认证头、发布时间、身份结论或 Article Evidence。Exa 凭证属于 Agent 运行环境，
-wechat-oa 不得读取或保存。
+Cookie、认证头、发布时间、身份结论或 Article Evidence。此路径的 Exa 凭证属于 Agent
+运行环境，不能通过 Candidate Batch 交给 wechat-oa。
 
 Candidate Batch 不能携带浏览器授权。本地 CLI 可用 `--browser-fallback` 做本次授权，
 也可在用户已经明确设置长期 `auto-fallback` 后自动处理 HTTP 验证页；`--no-browser`
@@ -25,19 +25,31 @@ Candidate Batch 不能携带浏览器授权。本地 CLI 可用 `--browser-fallb
 
 ## Direct Discovery
 
-不启动 Agent 而由 wechat-oa 直接搜索时，使用已经实现的 Brave 后端：
+不启动 Agent 而由 wechat-oa 直接搜索时，可选择 Brave 或 Exa；默认仍是 Brave：
 
 ```powershell
 wechat-oa --json discovery search "关键词" --company "公司名" --account "公众号名"
+wechat-oa --json discovery search "关键词" --company "公司名" --account "公众号名" `
+  --provider exa --hydrate --no-browser
 ```
 
-Brave API Key 只能由用户在交互终端运行 `wechat-oa discovery auth configure
---provider brave` 后进入 Windows 凭据管理器。不得要求用户把 API Key 放进提示词、
-命令参数、JSON、标准输入、日志或文件。
+Brave/Exa API Key 只能由用户在交互终端分别运行 `wechat-oa discovery auth configure
+--provider brave` 或 `wechat-oa discovery auth configure --provider exa` 后进入 Windows 凭据管理器。不得要求用户把 API Key 放进提示词、
+命令参数、环境变量、JSON、标准输入、日志或文件；特别不能依赖 `EXA_API_KEY` 进程环境。
+
+Exa 请求使用 host-only `mp.weixin.qq.com` 域名过滤；命中仍必须通过 wechat-oa 的严格
+HTTPS `mp.weixin.qq.com/s` URL 校验。非 `/s`、其他 host 或带凭据 URL 都不能成为候选。
 
 搜索结果只是 `candidates[]`。`title_hint`、`snippet`、`account_hint` 和
 `backend_date_hint` 都来自外部搜索，不能当作微信原文或官方身份依据。本功能是
 微信公众号文章发现，不是微信官方或全量索引。
+
+Direct Discovery 失败时同时检查退出码、`error.code` 和 `error.details.reason`：未配置与
+凭据拒绝使用 `AUTHENTICATION_ERROR`/退出码 6；限流、超时、网络、上游错误和无效响应
+使用 `NETWORK_ERROR`/退出码 5。稳定 reason 为 `not_configured`、
+`credential_rejected`、`rate_limited`、`timeout`、`network_error`、`provider_error`、
+`invalid_response`。搜索为空不是错误，而是 `ok: true`、空 `candidates[]`；单篇回读失败
+保留候选的 `hydration_attempt` 并令 `summary.partial: true`。
 
 ## 读取公众号原文与 Article Evidence
 

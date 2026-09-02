@@ -6,29 +6,42 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from wxcli.auth import PasswordBackend
+from wxcli.discovery.provider import DiscoveryProviderName
 from wxcli.errors import ErrorCode, ValidationError, WxcliError
 
 BRAVE_SERVICE_NAME = "wxcli.discovery.brave"
-_BRAVE_API_KEY = "api_key"
+EXA_SERVICE_NAME = "wxcli.discovery.exa"
+_API_KEY = "api_key"
 T = TypeVar("T")
+
+_SERVICE_NAMES: dict[DiscoveryProviderName, str] = {
+    "brave": BRAVE_SERVICE_NAME,
+    "exa": EXA_SERVICE_NAME,
+}
 
 
 class DiscoverySecretStore:
-    """Keep the Brave key in keyring, separate from Official Account secrets."""
+    """Keep provider keys in keyring, separate from Official Account secrets."""
 
     def __init__(self, backend: PasswordBackend) -> None:
         self._backend = backend
 
     def get_brave_api_key(self) -> str | None:
-        return self._call(
-            lambda: self._backend.get_password(BRAVE_SERVICE_NAME, _BRAVE_API_KEY)
-        )
+        return self.get_api_key("brave")
 
     def set_brave_api_key(self, value: str) -> None:
+        self.set_api_key("brave", value)
+
+    def get_api_key(self, provider: DiscoveryProviderName) -> str | None:
+        service_name = _SERVICE_NAMES[provider]
+        return self._call(lambda: self._backend.get_password(service_name, _API_KEY))
+
+    def set_api_key(self, provider: DiscoveryProviderName, value: str) -> None:
         if not value.strip():
-            raise ValidationError("The Brave API key must not be empty.")
+            raise ValidationError(f"The {provider.title()} API key must not be empty.")
+        service_name = _SERVICE_NAMES[provider]
         self._call(
-            lambda: self._backend.set_password(BRAVE_SERVICE_NAME, _BRAVE_API_KEY, value)
+            lambda: self._backend.set_password(service_name, _API_KEY, value)
         )
 
     @staticmethod

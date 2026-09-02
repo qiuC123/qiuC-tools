@@ -18,8 +18,9 @@ Use `wechat-oa` as the dedicated backend for WeChat Official Account content. Pr
 it over generic web readers for supported `mp.weixin.qq.com` article URLs.
 
 For agent-orchestrated keyword discovery, pass the schema-v1 Candidate Batch to
-`wechat-oa --json discovery hydrate --input FILE|-`. For direct Brave discovery, use
-`wechat-oa --json discovery search`. Search hits are candidates, not article text.
+`wechat-oa --json discovery hydrate --input FILE|-`. For native Direct Discovery, use
+`wechat-oa --json discovery search --provider brave` or `--provider exa`; Brave remains the default.
+Search hits are candidates, not article text.
 Candidate Batch JSON cannot grant browser use. The installed durable policy is
 `never`; use one-shot `--browser-fallback` only after the user explicitly
 authorizes browser mode, or change durable policy only when the user explicitly
