@@ -5,8 +5,8 @@
 1. 校验下载的 ZIP：
 
    ```powershell
-   Get-FileHash .\wechat-oa-0.7.2-windows-x64.zip -Algorithm SHA256
-   Get-Content .\wechat-oa-0.7.2-windows-x64.zip.sha256
+   Get-FileHash .\wechat-oa-0.7.3-windows-x64.zip -Algorithm SHA256
+   Get-Content .\wechat-oa-0.7.3-windows-x64.zip.sha256
    ```
 
    两处 SHA-256 应完全相同。
@@ -15,7 +15,7 @@
 3. 在仓库根目录运行安装脚本：
 
    ```powershell
-   pwsh .\scripts\install-release.ps1 -Version 0.7.2
+   pwsh .\scripts\install-release.ps1 -Version 0.7.3
    ```
 
    脚本先把完整产物复制到临时目录并完成离线冒烟测试，然后通过同一 NTFS 卷内的目录改名切换版本。安装位置固定为：

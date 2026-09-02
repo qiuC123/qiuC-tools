@@ -13,7 +13,7 @@ def test_source_and_package_versions_match() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["version"] == __version__
-    assert __version__ == "0.7.2"
+    assert __version__ == "0.7.3"
     assert project["project"]["scripts"]["wechat-oa"] == "wxcli.cli:main"
     assert project["project"]["scripts"]["wxcli"] == "wxcli.cli:main"
 
@@ -49,8 +49,8 @@ def test_release_contains_install_and_cleanup_guidance() -> None:
     assert "browser policy set never" in instructions
     assert "cache clear" in instructions
     assert "凭据管理器" in instructions
-    assert "wechat-oa-0.7.2-windows-x64.zip" in instructions
-    assert "install-release.ps1 -Version 0.7.2" in instructions
+    assert "wechat-oa-0.7.3-windows-x64.zip" in instructions
+    assert "install-release.ps1 -Version 0.7.3" in instructions
 
 
 def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
@@ -63,12 +63,12 @@ def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
     assert "Discovery Bundle output is deferred" in media_design
 
 
-def test_072_release_scope_includes_native_exa_without_schema_break() -> None:
+def test_073_release_scope_includes_native_exa_without_schema_break() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     discovery = (ROOT / "docs" / "article-discovery.md").read_text(encoding="utf-8")
 
-    assert "wechat-oa-v0.7.2" in readme
-    assert "wechat-oa-0.7.2-windows-x64" in readme
+    assert "wechat-oa-v0.7.3" in readme
+    assert "wechat-oa-0.7.3-windows-x64" in readme
     assert "--provider exa --hydrate --no-browser" in readme
     assert "Direct Discovery result remains schema v1" in discovery
     assert 'includeDomains: ["mp.weixin.qq.com"]' in discovery

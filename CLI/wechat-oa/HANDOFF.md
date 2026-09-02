@@ -1,5 +1,14 @@
 # WeChat OA 项目交接说明
 
+## 0.7.3 Exa deep 多查询召回修复（发布准备，2026-09-02）
+
+- 招聘雷达对 0.7.2 做了第二轮真实复验：整页重排成功把 Exa 原始 rank 74/80/88 的腾讯候选提升进前 20，证明本地排序修复有效；但已知腾讯原文仍不在 Exa 返回的完整 100 条结果中，因此本轮问题是 Provider 召回而不是候选截断或 Hydration。
+- Exa 改为一次有界 `deep` 搜索。结构化自然语言主查询包含目标公众号/公司、原查询、校招简称和软发布日期窗口；最多 10 条补充查询覆盖原始措辞、简称、人才计划和发布年份；固定搜索规划提示优先直接来源并降低其他公司、聚合、转载、面经和汇总内容。
+- 日期仍不下推成 `startPublishedDate`/`endPublishedDate` 硬过滤；所有 Exa 标题、作者、日期和排序仍只是 Candidate 提示，不能生成公众号身份、可信 `published_at` 或 Article Evidence。
+- Exa 搜索策略版本进入私有 query fingerprint。安装新版本后不会复用 0.7.2 的旧 Exa 页面缓存，也无需执行破坏性的 `discovery cache clear`；Brave 缓存指纹和对外 schema 不变。
+- 已知腾讯 URL 的 MockTransport 回归冻结完整 deep 请求体，并继续验证 HTTP `VERIFICATION_REQUIRED`、不自动打开 Chrome、候选保留为 partial 的边界。本轮未执行新的真实 Exa、微信或 Chrome。
+- Direct Discovery schema v1、单 JSON envelope、provider failure reasons、Windows 凭据所有权、严格 URL 校验、原始 Exa rank provenance 和 Brave 默认兼容契约均不变。
+
 ## 0.7.2 Exa 候选质量与 Hydration 排序修复（发布收口，2026-09-02）
 
 - 招聘雷达对 0.7.1 做了明确授权的真实复验：零候选缺陷已解除，但已知腾讯原文不在对外 50 条中；前 20 条 Hydration 含大量第三方或其他公司内容，均按契约停在 `VERIFICATION_REQUIRED`，没有打开 Chrome 或生成 Article Evidence。
