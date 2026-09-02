@@ -4,19 +4,21 @@
 
 - canonical `main` 已通过 PR #15 合入单篇文章原子 Evidence Bundle，合并提交为
   `fc76831`。
-- 当前发布准备分支为 `codex/wechat-oa-0.6.0-release`，运行时和构建版本升至 0.6.0。
+- PR #16 已完成 0.6.0 发布准备并 squash 合入 `main`，合并提交为
+  `2fa396b`。
 - 0.6.0 范围包含 Media Evidence、安全图片下载与缓存、标准二维码、本地 Windows OCR、
   单篇和发现批次的显式媒体分析、Media Doctor，以及单篇 Article Evidence Bundle。
 - schema-v2 Direct Discovery Request JSON 输入、Discovery Bundle 和派生 QR/OCR 缓存明确
   延期，不阻塞 0.6.0。
-- 0.6.0 候选 Windows x64 ZIP 已通过隔离构建和双命令离线冒烟，SHA-256 为
-  `2a9e584ca83b21e69ed2ed83ddc3e033f773c06c92b1d2301355448111e52e96`；该值尚未成为
-  正式 Release 固定哈希。
+- 正式标签 `wechat-oa-v0.6.0` 和 GitHub Release 已发布；Windows x64 ZIP 的固定
+  SHA-256 为 `2a9e584ca83b21e69ed2ed83ddc3e033f773c06c92b1d2301355448111e52e96`。
+- 已从公开 Release 重新下载 ZIP 和 SHA-256 文件，下载内容实算哈希、校验
+  文件和发布前候选哈希三者一致。
 - 发布准备验证为 402 项 pytest 全绿、mypy 检查 47 个源文件无错误、canonical Skill
   校验通过、PyInstaller spike 与完整 Windows 双命令构建通过。默认 Doctor 的五项 live
   check 均保持 `skip`，Media Doctor 为 `overall: pass`。
-- 当前正式 GitHub Release 仍是 0.5.1；在 Release PR 合并、构建产物复核并再次取得用户
-  确认前，不创建 `wechat-oa-v0.6.0` tag、不上传 Release，也不替换本机稳定安装。
+- canonical Skill 的安装来源固定到 0.6.0 Release 及上述哈希；本机稳定安装与
+  升级/回滚验收仍未执行，需用户另行明确授权。
 
 ## 历史项目接续摘要（2026-09-01）
 

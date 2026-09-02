@@ -65,6 +65,27 @@ def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
     assert "Discovery Bundle output is deferred" in media_design
 
 
+def test_skill_install_source_is_pinned_to_published_060_release() -> None:
+    operations = (
+        ROOT / "skills" / "wechat-oa" / "references" / "operations.md"
+    ).read_text(encoding="utf-8")
+    release_base = (
+        "https://github.com/qiuC123/qiuC-tools/releases/download/"
+        "wechat-oa-v0.6.0/wechat-oa-0.6.0-windows-x64.zip"
+    )
+    published_hash = (
+        "2a9e584ca83b21e69ed2ed83ddc3e033"
+        "f773c06c92b1d2301355448111e52e96"
+    )
+
+    assert "releases/tag/wechat-oa-v0.6.0" in operations
+    assert release_base in operations
+    assert f"{release_base}.sha256" in operations
+    assert operations.count(published_hash) == 2
+    assert "wechat-oa-0.6.0-windows-x64\\wechat-oa.exe" in operations
+    assert "0.5.1" not in operations
+
+
 def test_live_smoke_requires_explicit_flags_and_a_discovery_capable_executable() -> None:
     script = (ROOT / "scripts" / "live-discovery-smoke.ps1").read_text(encoding="utf-8")
 
