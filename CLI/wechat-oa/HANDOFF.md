@@ -1,6 +1,6 @@
 # WeChat OA 项目交接说明
 
-## 0.7.0 原生 Exa Direct Discovery（开发中，2026-09-02）
+## 0.7.0 原生 Exa Direct Discovery（发布准备，2026-09-02）
 
 - 招聘雷达会直接调用 `wechat-oa --json discovery search ... --provider exa --hydrate --no-browser`，不会传递 Exa Key，并会从子进程环境移除 `EXA_API_KEY`。
 - wechat-oa 已增加原生 Exa Provider；Brave 仍是默认值和兼容路径。两个 Key 分别保存在 Windows 凭据管理器，命令参数、JSON、环境、stdout、缓存和 Git 都不承载凭据。

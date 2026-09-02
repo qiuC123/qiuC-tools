@@ -13,7 +13,7 @@ def test_source_and_package_versions_match() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["version"] == __version__
-    assert __version__ == "0.6.0"
+    assert __version__ == "0.7.0"
     assert project["project"]["scripts"]["wechat-oa"] == "wxcli.cli:main"
     assert project["project"]["scripts"]["wxcli"] == "wxcli.cli:main"
 
@@ -49,20 +49,29 @@ def test_release_contains_install_and_cleanup_guidance() -> None:
     assert "browser policy set never" in instructions
     assert "cache clear" in instructions
     assert "凭据管理器" in instructions
-    assert "wechat-oa-0.6.0-windows-x64.zip" in instructions
-    assert "install-release.ps1 -Version 0.6.0" in instructions
+    assert "wechat-oa-0.7.0-windows-x64.zip" in instructions
+    assert "install-release.ps1 -Version 0.7.0" in instructions
 
 
 def test_060_release_scope_is_truthful_about_deferred_media_controls() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     media_design = (ROOT / "docs" / "media-evidence.md").read_text(encoding="utf-8")
 
-    assert "wechat-oa-v0.6.0" in readme
-    assert "wechat-oa-0.6.0-windows-x64" in readme
     assert "0.6.0 已实现" in readme
     assert "schema-v2 Direct Discovery Request input is deferred" in media_design
     assert "derived-result caching is deferred" in media_design
     assert "Discovery Bundle output is deferred" in media_design
+
+
+def test_070_release_scope_includes_native_exa_without_schema_break() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    discovery = (ROOT / "docs" / "article-discovery.md").read_text(encoding="utf-8")
+
+    assert "wechat-oa-v0.7.0" in readme
+    assert "wechat-oa-0.7.0-windows-x64" in readme
+    assert "--provider exa --hydrate --no-browser" in readme
+    assert "Direct Discovery result remains schema v1" in discovery
+    assert 'includeDomains: ["mp.weixin.qq.com"]' in discovery
 
 
 def test_skill_install_source_is_pinned_to_published_060_release() -> None:
@@ -122,11 +131,13 @@ def test_packaged_discovery_help_includes_candidate_hydration() -> None:
     assert "smoke-localappdata" in script
     assert "'media', 'doctor'" in script
     assert "standard_qr.available" in script
-    assert "discovery media controls are missing" in script
+    assert "discovery provider or media controls are missing" in script
     assert script.count("--analyze-media") >= 2
     assert "Evidence Bundle controls are missing" in script
     assert "Evidence Bundle preflight smoke test failed" in script
     assert "bundle-preflight-existing" in script
+    assert "--provider" in script
+    assert "Exa discovery keyring status smoke test failed" in script
 
 
 def test_agent_reach_installer_can_refresh_the_official_personal_skill() -> None:

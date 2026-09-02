@@ -239,15 +239,22 @@ $discoverySearchHelp = Invoke-PackagedWxcli @('discovery', 'search', '--help')
 $discoveryHydrateHelp = Invoke-PackagedWxcli @('discovery', 'hydrate', '--help')
 if (
     $discoverySearchHelp.Stdout -notmatch '--analyze-media' -or
-    $discoveryHydrateHelp.Stdout -notmatch '--analyze-media'
+    $discoveryHydrateHelp.Stdout -notmatch '--analyze-media' -or
+    $discoverySearchHelp.Stdout -notmatch '--provider'
 ) {
-    throw 'Packaged WeChat OA discovery media controls are missing.'
+    throw 'Packaged WeChat OA discovery provider or media controls are missing.'
 }
 $discoveryAuthStatus = ConvertFrom-SingleJson (
     Invoke-PackagedWxcli @('--json', 'discovery', 'auth', 'status', '--provider', 'brave')
 )
 if (-not $discoveryAuthStatus.ok) {
     throw 'Packaged wxcli discovery keyring status smoke test failed.'
+}
+$exaDiscoveryAuthStatus = ConvertFrom-SingleJson (
+    Invoke-PackagedWxcli @('--json', 'discovery', 'auth', 'status', '--provider', 'exa')
+)
+if (-not $exaDiscoveryAuthStatus.ok -or $exaDiscoveryAuthStatus.data.provider -ne 'exa') {
+    throw 'Exa discovery keyring status smoke test failed.'
 }
 $browserStatus = ConvertFrom-SingleJson (Invoke-PackagedWxcli @('--json', 'browser', 'status'))
 if (-not $browserStatus.ok) {
