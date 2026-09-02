@@ -240,6 +240,8 @@ def _write_bundle(
             artifact_path = f"images/{item.index:04d}-{item.byte_sha256}.{item.media_format.value}"
             image_path = staging.joinpath(*PurePosixPath(artifact_path).parts)
             image_path.parent.mkdir(exist_ok=True)
+            if _is_reparse_point(image_path.parent) or not image_path.parent.is_dir():
+                raise ValidationError("The Evidence Bundle image directory is unsafe.")
             _write_new_file(image_path, originals[item.index])
             files.append(_bundle_file(staging, image_path))
             image_artifacts += 1
@@ -294,6 +296,8 @@ def _write_bundle(
 
 
 def _verify_bundle(staging: Path, manifest: EvidenceBundleManifest) -> None:
+    if _tree_contains_reparse_point(staging):
+        raise ValidationError("Evidence Bundle staging contains a reparse point.")
     parsed = EvidenceBundleManifest.model_validate_json(
         (staging / "manifest.json").read_text(encoding="utf-8")
     )
@@ -402,9 +406,30 @@ def _cleanup_staging(
             or not staging.name.startswith(expected_prefix)
             or _is_reparse_point(staging)
             or not staging.is_dir()
+            or _tree_contains_reparse_point(staging)
         ):
             return
         _guard_path_components(destination.parent)
         shutil.rmtree(staging)
     except (OSError, ValidationError):
         return
+
+
+def _tree_contains_reparse_point(root: Path) -> bool:
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            entries = tuple(os.scandir(directory))
+        except OSError:
+            return True
+        for entry in entries:
+            path = Path(entry.path)
+            if _is_reparse_point(path):
+                return True
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+            except OSError:
+                return True
+    return False
