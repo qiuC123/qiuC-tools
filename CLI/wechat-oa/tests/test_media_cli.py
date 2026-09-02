@@ -332,3 +332,133 @@ def test_article_media_flag_is_explicitly_visible_on_get_and_evidence() -> None:
     assert evidence_help.exit_code == 0
     assert "--analyze-media" in strip_ansi(get_help.stdout)
     assert "--analyze-media" in strip_ansi(evidence_help.stdout)
+
+
+def test_article_bundle_requires_explicit_media_analysis_before_provider_use(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "PublicHttpProvider",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Bundle input must be rejected before provider construction")
+        ),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "article",
+            "get",
+            "https://mp.weixin.qq.com/s/TOKEN",
+            "--bundle",
+            str(tmp_path / "bundle"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert getattr(result.exception, "code", None) == "INVALID_ARGUMENT"
+    assert "--bundle requires --analyze-media" in str(result.exception)
+
+
+def test_bundle_metadata_only_requires_a_bundle_destination() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "article",
+            "evidence",
+            "https://mp.weixin.qq.com/s/TOKEN",
+            "--analyze-media",
+            "--bundle-metadata-only",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert getattr(result.exception, "code", None) == "INVALID_ARGUMENT"
+    assert "--bundle-metadata-only requires --bundle" in str(result.exception)
+
+
+def test_bundle_destination_preflight_happens_before_article_provider_use(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "existing"
+    destination.mkdir()
+    monkeypatch.setattr(
+        cli,
+        "PublicHttpProvider",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Destination preflight must run before provider construction")
+        ),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "article",
+            "get",
+            "https://mp.weixin.qq.com/s/TOKEN",
+            "--analyze-media",
+            "--bundle",
+            str(destination),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert getattr(result.exception, "code", None) == "VALIDATION_ERROR"
+    assert "must not already exist" in str(result.exception)
+
+
+def test_explicit_article_bundle_returns_bundle_summary_and_creates_directory(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _install_media_cli_fakes(monkeypatch)
+    destination = tmp_path / "bundle"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "article",
+            "get",
+            "https://mp.weixin.qq.com/s/TOKEN",
+            "--analyze-media",
+            "--bundle",
+            str(destination),
+            "--bundle-metadata-only",
+        ],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)["data"]
+    assert data["schema_version"] == "2"
+    assert data["article_evidence"]["content_sha256"] == "a" * 64
+    assert data["media_evidence"]["source_content_sha256"] == "a" * 64
+    assert data["bundle"]["schema_version"] == "1"
+    assert data["bundle"]["path"] == str(destination.resolve())
+    assert data["bundle"]["metadata_only"] is True
+    assert data["bundle"]["image_artifacts"] == 0
+    assert destination.is_dir()
+    assert (destination / "manifest.json").is_file()
+
+
+def test_bundle_flags_are_visible_only_on_single_article_media_commands() -> None:
+    runner = CliRunner()
+
+    get_help = strip_ansi(runner.invoke(app, ["article", "get", "--help"]).stdout)
+    evidence_help = strip_ansi(
+        runner.invoke(app, ["article", "evidence", "--help"]).stdout
+    )
+    discovery_help = strip_ansi(
+        runner.invoke(app, ["discovery", "hydrate", "--help"]).stdout
+    )
+
+    for help_text in (get_help, evidence_help):
+        assert "--bundle" in help_text
+        assert "--bundle-metadata-only" in help_text
+    assert "--bundle" not in discovery_help
