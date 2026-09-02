@@ -1,6 +1,6 @@
 # WeChat OA 项目交接说明
 
-## 0.7.2 Exa 候选质量与 Hydration 排序修复（发布准备，2026-09-02）
+## 0.7.2 Exa 候选质量与 Hydration 排序修复（发布收口，2026-09-02）
 
 - 招聘雷达对 0.7.1 做了明确授权的真实复验：零候选缺陷已解除，但已知腾讯原文不在对外 50 条中；前 20 条 Hydration 含大量第三方或其他公司内容，均按契约停在 `VERIFICATION_REQUIRED`，没有打开 Chrome 或生成 Article Evidence。
 - 根因是 Exa 已返回最多 100 条，但 Discovery Service 在完整结果页做本地相关性排序前先截成 50 条；同时旧排序会让“第三方作者、标题提到腾讯和秋招”的内容领先于账号提示未知但标题为腾讯的内容。
@@ -8,7 +8,10 @@
 - 排序优先账号提示与查询的组合命中；精确或相关账号提示加权，明确不同的账号提示只降权而不删除。原始 Exa rank 继续进入 provenance，任何搜索提示都不成为公众号身份、发布日期或 Article Evidence。
 - 脱敏质量回归模拟真实噪声分布，并把已知腾讯 URL 放在 Exa 原始 rank 80；目标在整页重排后进入前 20 Hydration，第三方结果不消耗该批次的 Hydration 预算。测试不调用真实 Exa、微信或 Chrome。
 - Direct Discovery schema v1、单 JSON envelope、错误码、Windows 凭据所有权、严格 URL 校验、Brave 默认兼容和 `--no-browser` 语义均不变。
-- 0.7.2 发布准备验证为 429 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `fd739fd0846effb0f0de02063cc5d60c3e1335a1cc65b476b3d6bffbe5c6cfaa`。
+- PR #23 已 squash 合入 `main`，合并提交为 `6d5a6ad`；远端 Tests and type checks 与 Windows package smoke 均通过。
+- 正式标签 `wechat-oa-v0.7.2` 和 GitHub Release 已发布。0.7.2 验证为 429 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。ZIP SHA-256 为 `fd739fd0846effb0f0de02063cc5d60c3e1335a1cc65b476b3d6bffbe5c6cfaa`。
+- 已从公开 Release 重新下载 ZIP 和校验文件，实算哈希、发布校验值和固定哈希三者一致。稳定安装与 0.7.2 → 0.7.1 → 0.7.2 双向回滚通过，最终为 `current=0.7.2`、`previous=0.7.1`，canonical Skill 已同步，Exa 凭据状态仍为 `configured=true`。
+- 0.7.2 构建后没有再次执行真实 Exa、微信文章回读或 Chrome；真实质量复验仍由招聘雷达按冻结命令另行执行。
 
 ## 0.7.1 Exa Direct Discovery 召回修复（发布收口，2026-09-02）
 
