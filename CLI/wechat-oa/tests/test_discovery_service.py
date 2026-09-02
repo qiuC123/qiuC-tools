@@ -134,6 +134,8 @@ def test_provider_page_size_and_name_drive_cached_cursor_continuation(tmp_path) 
     assert len(first.candidates) == 50
     assert first.next_cursor is not None
     assert {item.search_provenance.provider for item in first.candidates} == {"exa"}
+    assert first.candidates[0].search_provenance.rank == 1
+    assert first.candidates[0].search_provenance.result_id == "r1"
     assert provider.calls == [0]
 
     provider.calls.clear()
