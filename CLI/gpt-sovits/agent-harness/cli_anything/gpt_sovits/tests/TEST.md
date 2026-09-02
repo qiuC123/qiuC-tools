@@ -59,16 +59,21 @@ neutral speaker/language/count inputs, and the subproject root did not ignore pr
 directories outside the harness. Both tests now pass with parameterized plans and root-level
 ignore protection.
 
+During the second publication review, the new versioned private prompt-manifest assertion failed
+before the ignore pattern was widened. The non-default English plan and custom-speaker checkpoint
+tests were contract-coverage additions and passed against the generalized implementation; they
+also prove that checkpoints belonging to a different speaker are rejected.
+
 ## Latest publication-branch results
 
 - Portability red test: `1 failed` before the fix because the old default was machine-specific.
 - Portability focused green test: `14 passed in 2.67s`.
 - Real-checkout environment contract: `2 passed in 4.61s`.
-- Stage 2B: `54 passed in 9.61s`.
-- Publication-ignore focused contract: `1 passed in 0.58s`.
-- Stage 2A: `161 passed in 16.67s`.
+- Second-review focused contracts: `6 passed in 3.76s` after the expected ignore-pattern red test.
+- Stage 2B: `58 passed in 12.14s`.
+- Stage 2A: `161 passed in 12.52s`.
 - Python 3.13 editable installation completed successfully.
-- Force-installed complete suite: `305 passed in 124.42s`, with 0 failures and 0 skips.
+- Force-installed complete suite: `309 passed in 122.67s`, with 0 failures and 0 skips.
 - The installed entry point and real GPT-SoVITS backend produced and programmatically validated a
   WAV. Backend paths were supplied only through the documented environment variables and are
   deliberately omitted from this public record.
