@@ -1,0 +1,43 @@
+# Python build and test artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Models and weights
+*.ckpt
+*.pth
+*.pt
+*.onnx
+*.safetensors
+*.bin
+
+# Audio and video
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.aac
+*.mkv
+*.mp4
+*.mov
+*.webm
+
+# Generated datasets, outputs, logs, state and caches
+datasets/
+dataset/
+outputs/
+output/
+logs/
+state/
+cache/
+.cache/
+*.log
+
+# Local configuration, secrets and private prompt manifests
+.env
+.env.*
+!.env.example
+reference-prompt*.json
+private-prompt-manifest.json
