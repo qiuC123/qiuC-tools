@@ -1,13 +1,16 @@
 # WeChat OA 项目交接说明
 
-## 0.7.1 Exa Direct Discovery 召回修复（发布准备，2026-09-02）
+## 0.7.1 Exa Direct Discovery 召回修复（发布收口，2026-09-02）
 
 - 招聘雷达使用 `query="2027届 秋招"`、company/account=`腾讯` 和 2026-06-01 至 2026-09-02 窗口时，0.7.0 Exa 返回成功空结果，但已知存在严格且可回读的公众号文章 URL。
 - 根因是 0.7.0 同时把 company/account 重复编码为引号短语，并把证据日期窗口下推成 Exa `startPublishedDate`/`endPublishedDate` 硬过滤。Exa 官方契约明确日期过滤只返回带有且满足 provider 发布时间的链接，因此索引缺少日期的微信文章会被排除。
 - 修复将 company/account 作为去重的自然语义提示，不再使用强制引号短语；日期窗口不再下推给 Exa，仍参与本地候选排序，并只在成功 Hydration 后依据微信原文 `published_at` 做可信过滤。
 - 模拟回归使用已知严格 URL、标题、账号提示和无 Exa 日期元数据的响应；在 `hydrate=true`、`allow_browser=false` 且 HTTP 返回 `VERIFICATION_REQUIRED` 时，候选仍被保留并返回 `summary.partial=true`，不会自动打开 Chrome或伪造 Article Evidence。
 - Direct Discovery schema v1、单 UTF-8 JSON envelope、provider failure reasons、Windows 凭据所有权、严格 URL 校验及 Brave 默认兼容契约均不变。本轮测试不调用真实 Exa、微信或 Chrome。
-- 0.7.1 发布准备验证为 427 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `abf741a67b0c01a2bb7364e092f927b13065ff92b57c70c9ed65fa4c20240ee1`。
+- PR #21 已 squash 合入 `main`，合并提交为 `887868e`；远端 Tests and type checks 与 Windows package smoke 均通过。
+- 正式标签 `wechat-oa-v0.7.1` 和 GitHub Release 已发布。0.7.1 验证为 427 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。ZIP SHA-256 为 `abf741a67b0c01a2bb7364e092f927b13065ff92b57c70c9ed65fa4c20240ee1`。
+- 已从公开 Release 重新下载 ZIP 和校验文件，实算哈希、发布校验值和固定哈希三者一致。稳定安装与 0.7.1 → 0.7.0 → 0.7.1 双向回滚通过，最终为 `current=0.7.1`、`previous=0.7.0`，canonical Skill 已同步，Exa 凭据状态仍为 `configured=true`。
+- 本轮没有执行真实 Exa 搜索、微信文章回读或 Chrome；已知腾讯文章的召回由脱敏 MockTransport 回归覆盖，真实服务端召回仍需另行明确授权 live smoke 后确认。
 
 ## 0.7.0 原生 Exa Direct Discovery 发布收口（2026-09-02）
 
