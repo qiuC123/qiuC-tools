@@ -22,7 +22,7 @@ CLI 参数或输出契约变化时，应先在本仓库完成实现和发布，�
 
 ```text
 CLI/
-└─ wechat-oa/  # 微信公众号内容与草稿证据 CLI
+├─ wechat-oa/  # 微信公众号内容与草稿证据 CLI
 └─ gpt-sovits/  # GPT-SoVITS 本地推理与训练工作流 CLI
 ```
 

@@ -39,5 +39,5 @@ cache/
 .env
 .env.*
 !.env.example
-reference-prompt.json
+reference-prompt*.json
 private-prompt-manifest.json

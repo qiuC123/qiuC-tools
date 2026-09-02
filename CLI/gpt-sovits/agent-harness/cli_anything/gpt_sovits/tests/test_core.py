@@ -100,6 +100,8 @@ class TestPublicationIgnoreBoundary:
             "CLI/gpt-sovits/docs/private/example.wav",
             "CLI/gpt-sovits/runtime/state/session.json",
             "CLI/gpt-sovits/data/reference-prompt.json",
+            "CLI/gpt-sovits/docs/reference-prompt-private.json",
+            "CLI/gpt-sovits/agent-harness/reference-prompt-v2.json",
         ]
         for candidate in protected:
             result = subprocess.run(
@@ -124,6 +126,14 @@ class TestPublicationIgnoreBoundary:
         )
         assert ignored.returncode == 1
         assert tracked.returncode == 0
+
+        public_json = "CLI/gpt-sovits/docs/public-example.json"
+        public_ignored = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--quiet", public_json],
+            cwd=repository,
+            check=False,
+        )
+        assert public_ignored.returncode == 1
 
 
 class TestTextAndOutput:

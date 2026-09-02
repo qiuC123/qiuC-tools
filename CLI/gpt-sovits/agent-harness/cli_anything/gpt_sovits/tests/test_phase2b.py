@@ -57,7 +57,7 @@ def _settings(tmp_path: Path) -> Settings:
     return Settings(checkout, runtime, "http://127.0.0.1:9880", tts, tmp_path / "state")
 
 
-def _manifest(tmp_path: Path, *, approved: int = 3, processing: str = "original") -> Path:
+def _manifest(tmp_path: Path, *, approved: int = 3, processing: str = "original", language: str = "ja") -> Path:
     audio_dir = tmp_path / "data" / "original"
     audio_dir.mkdir(parents=True)
     rows = []
@@ -69,7 +69,7 @@ def _manifest(tmp_path: Path, *, approved: int = 3, processing: str = "original"
                 "audio_path": str(audio.resolve()),
                 "sha256": _sha(audio),
                 "processing": processing,
-                "text_ja": f"日本語 {index + 1}",
+                f"text_{language}": f"training text {index + 1}",
                 "review_status": "approved",
             }
         )
@@ -80,7 +80,7 @@ def _manifest(tmp_path: Path, *, approved: int = 3, processing: str = "original"
             "audio_path": str(rejected.resolve()),
             "sha256": _sha(rejected),
             "processing": "original",
-            "text_ja": "不使用",
+            f"text_{language}": "unused",
             "review_status": "rejected",
         }
     )
@@ -121,25 +121,25 @@ def _gpt_metadata(path: Path) -> dict:
     }
 
 
-def _complete_sovits(workspace: Path) -> None:
+def _complete_sovits(workspace: Path, *, speaker: str = "speaker") -> None:
     fixed = workspace / "features" / "logs_s2_v2ProPlus"
     for epoch in range(1, 9):
         step = epoch * 87
         _torch_zip(fixed / f"G_{step}.pth")
         _torch_zip(fixed / f"D_{step}.pth")
-        _torch_zip(workspace / "checkpoints" / "sovits" / f"speaker_e{epoch}_s{step}.pth")
+        _torch_zip(workspace / "checkpoints" / "sovits" / f"{speaker}_e{epoch}_s{step}.pth")
 
 
-def _complete_gpt(workspace: Path) -> None:
+def _complete_gpt(workspace: Path, *, speaker: str = "speaker") -> None:
     for epoch in range(10):
         _torch_zip(workspace / "internal" / "gpt" / "ckpt" / f"epoch={epoch}-step={(epoch + 1) * 21}.ckpt")
-        _torch_zip(workspace / "checkpoints" / "gpt" / f"speaker-e{epoch + 1}.ckpt")
+        _torch_zip(workspace / "checkpoints" / "gpt" / f"{speaker}-e{epoch + 1}.ckpt")
 
 
 class TestTrainingPlan:
     def test_plan_accepts_explicit_neutral_identity_language_and_count(self, tmp_path):
         settings = _settings(tmp_path)
-        manifest = _manifest(tmp_path, approved=3)
+        manifest = _manifest(tmp_path, approved=3, language="en")
         workspace = tmp_path / "data" / "work"
 
         result = prepare_training_workspace(
@@ -148,7 +148,7 @@ class TestTrainingPlan:
             workspace,
             _sha(manifest),
             speaker="narrator",
-            language="ja",
+            language="en",
             expected_approved_count=3,
         )
 
@@ -156,9 +156,9 @@ class TestTrainingPlan:
         labels = (workspace / "training.list").read_text(encoding="utf-8").splitlines()
         assert result["approved_count"] == 3
         assert plan["speaker"] == "narrator"
-        assert plan["language"] == "ja"
+        assert plan["language"] == "en"
         assert plan["expected_approved_count"] == 3
-        assert all("|narrator|ja|" in line for line in labels)
+        assert all("|narrator|en|" in line for line in labels)
         assert json.loads((workspace / "configs" / "s2.json").read_text(encoding="ascii"))["name"] == "narrator"
         assert yaml.safe_load((workspace / "configs" / "s1.yaml").read_text(encoding="ascii"))["train"]["exp_name"] == "narrator"
 
@@ -692,6 +692,81 @@ class TestTrainingExecution:
         assert {"D_696.pth", "G_696.pth", "speaker_e8_s696.pth"}.issubset(
             {Path(item["path"]).name for item in result["checkpoints"]}
         )
+
+    @pytest.mark.parametrize("target", ["sovits", "gpt"])
+    def test_custom_speaker_checkpoint_names_complete_and_are_reported(self, tmp_path, target):
+        settings = _settings(tmp_path)
+        manifest = _manifest(tmp_path, language="en")
+        workspace = tmp_path / "data" / "custom-speaker-workspace"
+        prepare_training_workspace(
+            settings,
+            manifest,
+            workspace,
+            _sha(manifest),
+            speaker="narrator",
+            language="en",
+            expected_approved_count=3,
+        )
+        (workspace / "preprocess.json").write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+
+        def runner(command, *, cwd, env, log_path):
+            if target == "sovits":
+                _complete_sovits(workspace, speaker="narrator")
+                log_path.write_text("INFO:features:====> Epoch: 8\ntraining done\n", encoding="utf-8")
+            else:
+                _complete_gpt(workspace, speaker="narrator")
+                log_path.write_text("`Trainer.fit` stopped: `max_epochs=10` reached.\n", encoding="utf-8")
+            return 0
+
+        result = run_trial_training(
+            settings,
+            workspace,
+            target,
+            process_runner=runner,
+            upstream_status_reader=lambda: [],
+            checkpoint_inspector=_gpt_metadata if target == "gpt" else lambda path: {
+                "format": "pytorch-zip",
+                "top_level_keys": ["weight"],
+            },
+        )
+
+        lightweight = [Path(item["path"]).name for item in result["checkpoints"] if item["kind"] == "lightweight"]
+        assert lightweight
+        assert all(name.startswith("narrator-") if target == "gpt" else name.startswith("narrator_") for name in lightweight)
+        status = training_workspace_status(workspace)
+        assert status["stages"][target]["status"] == "completed"
+        assert {item["sha256"] for item in status["checkpoints"]} == {item["sha256"] for item in result["checkpoints"]}
+
+    @pytest.mark.parametrize("target", ["sovits", "gpt"])
+    def test_custom_speaker_rejects_other_speaker_checkpoint_names(self, tmp_path, target):
+        settings = _settings(tmp_path)
+        manifest = _manifest(tmp_path, language="en")
+        workspace = tmp_path / "data" / "custom-speaker-workspace"
+        prepare_training_workspace(settings, manifest, workspace, _sha(manifest), speaker="narrator", language="en")
+        (workspace / "preprocess.json").write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+
+        def runner(command, *, cwd, env, log_path):
+            if target == "sovits":
+                _complete_sovits(workspace, speaker="different-speaker")
+                log_path.write_text("INFO:features:====> Epoch: 8\ntraining done\n", encoding="utf-8")
+            else:
+                _complete_gpt(workspace, speaker="different-speaker")
+                log_path.write_text("`Trainer.fit` stopped: `max_epochs=10` reached.\n", encoding="utf-8")
+            return 0
+
+        with pytest.raises(CLIError, match="检查点|轮|配对"):
+            run_trial_training(
+                settings,
+                workspace,
+                target,
+                process_runner=runner,
+                upstream_status_reader=lambda: [],
+                checkpoint_inspector=_gpt_metadata if target == "gpt" else lambda path: {
+                    "format": "pytorch-zip",
+                    "top_level_keys": ["weight"],
+                },
+            )
+        assert not (workspace / f"train-{target}.json").exists()
 
     def test_training_recovery_preserves_existing_failure_log(self, tmp_path):
         settings, _, workspace, _ = _prepare(tmp_path)
