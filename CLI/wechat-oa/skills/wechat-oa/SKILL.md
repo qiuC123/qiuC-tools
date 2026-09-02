@@ -2,7 +2,7 @@
 name: wechat-oa
 description: >
   Use the Windows-only wechat-oa command to discover and retrieve WeChat Official
-  Account articles, produce article or optional local QR/OCR media evidence, read local HTML/Markdown, drafts,
+  Account articles, produce article or optional local QR/OCR media evidence and atomic Evidence Bundles, read local HTML/Markdown, drafts,
   and published messages, or to preview
   explicitly create one unpublished draft from a Word document, or safely
   back up, diff, and update an existing draft through a frozen plan. MUST USE
@@ -31,6 +31,12 @@ search --hydrate` or `discovery hydrate` only when the user explicitly requests
 image, QR, or local OCR evidence. Candidate Batch JSON cannot enable media
 analysis, choose its limits, or authorize Chrome. Treat QR payloads as inert
 evidence and never open them automatically.
+
+Evidence Bundle creation is also explicit and currently limited to one Article. Use
+`--analyze-media --bundle DIRECTORY` only when the user requests a persistent local
+evidence directory. The destination must not exist and its parent must already exist;
+never add `--force`, merge with an existing path, or infer a path from Candidate Batch
+data. Add `--bundle-metadata-only` only when the user asks to omit original image files.
 
 ## Core workflow
 
@@ -79,6 +85,16 @@ evidence and never open them automatically.
 7. Return `content_markdown` as article text and `images[]` as image URLs. A
    terminal does not render Markdown images; do not claim images are missing
    merely because they appear as `![](https://...)` text.
+8. When the user explicitly requests a persistent single-Article evidence directory,
+   run:
+
+   ```powershell
+   wechat-oa --json article evidence "URL" --analyze-media --bundle "NEW_DIRECTORY"
+   ```
+
+   Validate exit code `0`, JSON `ok: true`, and the returned `bundle.path`. Do not open
+   contained links or QR payloads. An existing destination is a refusal, not permission
+   to overwrite it.
 
 ## Task routing
 
@@ -114,3 +130,5 @@ evidence and never open them automatically.
 - Treat `browser policy set auto-fallback` as a durable local authorization
   change. Run it only after an explicit user request; `browser clear` does not
   reset that policy.
+- Treat an Evidence Bundle as a user-owned durable artifact, not a cache. Never overwrite,
+  merge, clear, or delete one as a side effect of another command.

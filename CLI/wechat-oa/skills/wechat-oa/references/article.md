@@ -40,6 +40,30 @@ Evidence schema v1。不加开关时输出结构不变，也不读取图片缓�
 二维码结果只作为惰性文本证据，绝不打开目标。OCR 只使用本地 Windows 能力，
 不上传图片、不切换到云 OCR；`unavailable`、单图失败和部分结果必须原样报告。
 
+## Evidence Bundle
+
+只有用户明确要求长期保存单篇文章证据时，才指定一个尚不存在的目录：
+
+```powershell
+wechat-oa --json article evidence "URL" --analyze-media --bundle "C:\evidence\article-001"
+```
+
+目标目录不能已经存在，父目录必须已经存在，且路径不能经过符号链接、junction、
+mount point 或其他 reparse point。命令不会覆盖或合并目录。Bundle 默认保存证据 JSON、
+文章 Markdown、外链和图片清单、manifest、哈希，以及每个成功分析图片位置对应的原始
+图片字节。
+
+如果用户只需要元数据，不需要图片文件：
+
+```powershell
+wechat-oa --json article evidence "URL" --analyze-media `
+  --bundle "C:\evidence\article-001" --bundle-metadata-only
+```
+
+metadata-only 仍会执行显式媒体分析，只是不把原始图片写入 Bundle；不会为 Bundle 再次
+下载图片。Candidate Batch 不能选择 Bundle 路径，Discovery Bundle 当前未实现。
+Bundle 是用户持久文件，不是缓存；不得自动打开其中链接，也不得通过缓存清理删除。
+
 ## 验证页
 
 `VERIFICATION_REQUIRED` 表示微信返回了验证页，不表示文章不存在，也不表示

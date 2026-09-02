@@ -88,6 +88,9 @@ def test_packaged_discovery_help_includes_candidate_hydration() -> None:
     assert "standard_qr.available" in script
     assert "discovery media controls are missing" in script
     assert script.count("--analyze-media") >= 2
+    assert "Evidence Bundle controls are missing" in script
+    assert "Evidence Bundle preflight smoke test failed" in script
+    assert "bundle-preflight-existing" in script
 
 
 def test_agent_reach_installer_can_refresh_the_official_personal_skill() -> None:
