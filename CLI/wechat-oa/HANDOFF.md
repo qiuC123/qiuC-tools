@@ -8,6 +8,7 @@
 - 排序优先账号提示与查询的组合命中；精确或相关账号提示加权，明确不同的账号提示只降权而不删除。原始 Exa rank 继续进入 provenance，任何搜索提示都不成为公众号身份、发布日期或 Article Evidence。
 - 脱敏质量回归模拟真实噪声分布，并把已知腾讯 URL 放在 Exa 原始 rank 80；目标在整页重排后进入前 20 Hydration，第三方结果不消耗该批次的 Hydration 预算。测试不调用真实 Exa、微信或 Chrome。
 - Direct Discovery schema v1、单 JSON envelope、错误码、Windows 凭据所有权、严格 URL 校验、Brave 默认兼容和 `--no-browser` 语义均不变。
+- 0.7.2 发布准备验证为 429 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `fd739fd0846effb0f0de02063cc5d60c3e1335a1cc65b476b3d6bffbe5c6cfaa`。
 
 ## 0.7.1 Exa Direct Discovery 召回修复（发布收口，2026-09-02）
 
