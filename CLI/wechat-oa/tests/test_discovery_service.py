@@ -179,6 +179,77 @@ def test_exa_candidates_still_require_strict_wechat_article_urls(tmp_path) -> No
     ]
 
 
+def test_exa_reranks_complete_page_before_candidate_and_hydration_limits(tmp_path) -> None:
+    target_url = "https://mp.weixin.qq.com/s/Fn8umHSk_LdZ6lz4YPa5Rg"
+    hits = [
+        SearchHit(
+            title=f"其他企业2027届秋招信息 {index}",
+            url=f"https://mp.weixin.qq.com/s/NOISE{index}",
+            account_hint=("第三方求职号" if index % 2 else None),
+            rank=index,
+            result_id=f"noise-{index}",
+        )
+        for index in range(1, 101)
+    ]
+    hits[1] = SearchHit(
+        title="社招与校招｜腾讯混元发布新模型",
+        url="https://mp.weixin.qq.com/s/OFFICIAL-OFF-TOPIC",
+        account_hint="腾讯",
+        rank=2,
+        result_id="official-off-topic",
+    )
+    hits[25] = SearchHit(
+        title="秋招逆袭之路，已拿腾讯等校招 offer",
+        url="https://mp.weixin.qq.com/s/THIRD-PARTY",
+        account_hint="第三方求职号",
+        rank=26,
+        result_id="third-party",
+    )
+    hits[79] = SearchHit(
+        title="顶尖人才寻人启事｜青云计划2027校招全面启动",
+        url=target_url,
+        account_hint="腾讯",
+        rank=80,
+        result_id="known-target",
+    )
+    provider = FakeDiscoveryProvider(
+        {0: SearchPage(hits=hits, has_more=False)},
+        name="exa",
+        page_size=100,
+    )
+    verification = FakeEvidence(
+        {item.url: VerificationRequiredError() for item in hits}
+    )
+    result = DiscoveryService(
+        provider,
+        DiscoveryStore(tmp_path / "state.sqlite3"),
+        http_evidence=verification,  # type: ignore[arg-type]
+        now=lambda: NOW,
+    ).search(
+        DiscoveryRequest(
+            query="2027届 秋招",
+            companies=["腾讯"],
+            expected_accounts=[ExpectedAccount(display_names=["腾讯"])],
+            limit=50,
+            hydrate=True,
+            priority_hydrate=10,
+            max_hydrate=20,
+            allow_browser=False,
+        )
+    )
+
+    assert result.summary.received == 100
+    assert len(result.candidates) == 50
+    target = next(
+        item for item in result.candidates if item.fetch_url.encoded_string() == target_url
+    )
+    assert result.candidates.index(target) < 20
+    assert target.search_provenance.rank == 80
+    assert target.verification_status == VerificationStatus.VERIFICATION_REQUIRED
+    assert target_url in verification.calls
+    assert "https://mp.weixin.qq.com/s/THIRD-PARTY" not in verification.calls
+
+
 def test_invalid_provider_page_size_is_rejected_before_search(tmp_path) -> None:
     provider = FakeDiscoveryProvider({}, page_size=0)
 

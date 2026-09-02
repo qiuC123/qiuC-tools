@@ -22,7 +22,7 @@ from wxcli.discovery.models import (
     VerificationStatus,
 )
 from wxcli.discovery.provider import DiscoveryProvider
-from wxcli.discovery.ranking import choose_hydration, rank_candidates
+from wxcli.discovery.ranking import choose_hydration, rank_candidates, rank_search_hits
 from wxcli.discovery.store import DiscoveryStore
 from wxcli.discovery.tokens import (
     decode_checkpoint,
@@ -104,7 +104,8 @@ class DiscoveryService:
                 self._store.put_page(
                     self._provider.name, fingerprint, page_offset, page, run_started
                 )
-            visible_hits = page.hits[skip_in_page:]
+            ordered_hits = rank_search_hits(page.hits, request)
+            visible_hits = ordered_hits[skip_in_page:]
             received += len(visible_hits)
             reached_limit = False
             for index, hit in enumerate(visible_hits, start=skip_in_page):
@@ -143,7 +144,7 @@ class DiscoveryService:
                     )
                 )
                 if len(candidates) >= request.limit:
-                    more_available = index + 1 < len(page.hits) or page.has_more
+                    more_available = index + 1 < len(ordered_hits) or page.has_more
                     reached_limit = True
                     break
             if reached_limit:

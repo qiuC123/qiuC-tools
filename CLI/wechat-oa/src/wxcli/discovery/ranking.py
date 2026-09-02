@@ -10,6 +10,7 @@ from wxcli.discovery.models import (
     CandidateConfidence,
     DiscoveryRequest,
     HydrationDecision,
+    SearchHit,
 )
 
 
@@ -29,7 +30,26 @@ def rank_candidates(
             candidate.confidence = CandidateConfidence.MEDIUM
         else:
             candidate.confidence = CandidateConfidence.LOW
-    return sorted(candidates, key=lambda item: _sort_key(item))
+    return sorted(candidates, key=lambda item: _candidate_sort_key(item, request))
+
+
+def rank_search_hits(
+    hits: list[SearchHit], request: DiscoveryRequest
+) -> list[SearchHit]:
+    """Rank a complete provider page before applying the public candidate limit."""
+
+    return sorted(
+        hits,
+        key=lambda item: _hint_sort_key(
+            title=item.title,
+            snippet=item.snippet,
+            account_hint=item.account_hint,
+            backend_date_hint=item.backend_date_hint,
+            provider_rank=item.rank,
+            stable_identity=item.result_id,
+            request=request,
+        ),
+    )
 
 
 def choose_hydration(candidates: list[ArticleCandidate], request: DiscoveryRequest) -> None:
@@ -85,7 +105,7 @@ def match_reasons(candidate: ArticleCandidate, request: DiscoveryRequest) -> lis
         for account in request.expected_accounts
         for name in account.display_names
     ]
-    if account_hint and any(value and value in account_hint for value in expected_names):
+    if _account_hint_quality(account_hint, expected_names) > 0:
         reasons.append("expected_account_hint")
     companies = [_normalize(value) for value in request.companies]
     if title and any(value and value in title for value in companies):
@@ -100,23 +120,78 @@ def match_reasons(candidate: ArticleCandidate, request: DiscoveryRequest) -> lis
     return reasons
 
 
-def _sort_key(candidate: ArticleCandidate) -> tuple[int, int, int, int, int, int, str]:
-    reasons = set(candidate.match_reasons)
-    return (
-        -int("expected_account_hint" in reasons),
-        -int("company_title" in reasons),
-        -int("query_title" in reasons),
-        -int("query_snippet" in reasons),
-        -int("backend_date_hint" in reasons),
-        candidate.search_provenance.rank,
-        candidate.article_identity,
+def _candidate_sort_key(
+    candidate: ArticleCandidate, request: DiscoveryRequest
+) -> tuple[int, int, int, int, int, int, int, str]:
+    return _hint_sort_key(
+        title=candidate.title_hint,
+        snippet=candidate.snippet,
+        account_hint=candidate.account_hint,
+        backend_date_hint=candidate.backend_date_hint,
+        provider_rank=candidate.search_provenance.rank,
+        stable_identity=candidate.article_identity,
+        request=request,
     )
+
+
+def _hint_sort_key(
+    *,
+    title: str | None,
+    snippet: str | None,
+    account_hint: str | None,
+    backend_date_hint: date | None,
+    provider_rank: int,
+    stable_identity: str,
+    request: DiscoveryRequest,
+) -> tuple[int, int, int, int, int, int, int, str]:
+    normalized_title = _normalize(title)
+    normalized_snippet = _normalize(snippet)
+    normalized_account = _normalize(account_hint)
+    expected_names = [
+        _normalize(name)
+        for account in request.expected_accounts
+        for name in account.display_names
+    ]
+    account_quality = _account_hint_quality(normalized_account, expected_names)
+    companies = [_normalize(value) for value in request.companies]
+    company_title = bool(
+        normalized_title
+        and any(value and value in normalized_title for value in companies)
+    )
+    query_terms = _query_terms(request.query)
+    title_matches = sum(term in normalized_title for term in query_terms)
+    snippet_matches = sum(term in normalized_snippet for term in query_terms)
+    account_query_match = account_quality > 0 and title_matches > 0
+    date_matches = bool(backend_date_hint and _date_matches(backend_date_hint, request))
+    return (
+        -int(account_query_match),
+        -account_quality,
+        -int(company_title),
+        -title_matches,
+        -snippet_matches,
+        -int(date_matches),
+        provider_rank,
+        stable_identity,
+    )
+
+
+def _account_hint_quality(account_hint: str, expected_names: list[str]) -> int:
+    if not expected_names:
+        return 0
+    if not account_hint:
+        return 0
+    if account_hint in expected_names:
+        return 2
+    if any(value and value in account_hint for value in expected_names):
+        return 1
+    return -1
 
 
 def _query_terms(value: str) -> list[str]:
     normalized = _normalize(value)
     terms = [_normalize(item) for item in re.split(r"\s+", value) if item.strip()]
-    return list(dict.fromkeys([normalized, *terms]))
+    numeric_terms = re.findall(r"(?<!\d)\d{2,4}(?!\d)", normalized)
+    return list(dict.fromkeys([normalized, *terms, *numeric_terms]))
 
 
 def _normalize(value: str | None) -> str:

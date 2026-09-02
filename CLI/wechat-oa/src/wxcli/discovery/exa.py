@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from collections.abc import Callable, Mapping
 from datetime import date
@@ -156,9 +157,12 @@ class ExaDiscoveryProvider:
 
 
 def _build_query(request: DiscoveryRequest) -> str:
-    terms = [request.query, *request.companies]
+    terms = [*request.companies]
     for account in request.expected_accounts:
         terms.extend(account.display_names)
+    terms.append("官方公众号")
+    terms.append(request.query)
+    terms.extend(_query_expansions(request.query))
     unique_terms: list[str] = []
     seen: set[str] = set()
     for term in terms:
@@ -168,6 +172,20 @@ def _build_query(request: DiscoveryRequest) -> str:
         seen.add(identity)
         unique_terms.append(term)
     return " ".join(unique_terms)
+
+
+def _query_expansions(value: str) -> list[str]:
+    """Add small lexical variants without turning provider hints into evidence."""
+
+    normalized = " ".join(value.split())
+    expansions = re.findall(r"(?<!\d)(\d{4})届", normalized)
+    if "秋招" in normalized:
+        expansions.extend(("校招", "校园招聘", "秋季招聘"))
+    if "春招" in normalized:
+        expansions.extend(("校招", "校园招聘", "春季招聘"))
+    if "校园招聘" in normalized and "校招" not in normalized:
+        expansions.append("校招")
+    return expansions
 
 
 def _optional_string(value: object, maximum: int) -> str | None:

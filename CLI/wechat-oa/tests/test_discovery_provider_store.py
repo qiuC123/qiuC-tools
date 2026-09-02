@@ -102,7 +102,7 @@ def test_exa_sends_bounded_domain_filtered_query_and_sanitizes_results() -> None
     assert observed[0].headers["x-api-key"] == "example-secret"
     body = json.loads(observed[0].content)
     assert body == {
-        "query": "2027 校园招聘 Acme",
+        "query": "Acme 官方公众号 2027 校园招聘 校招",
         "includeDomains": ["mp.weixin.qq.com"],
         "numResults": 100,
         "type": "auto",
@@ -169,7 +169,7 @@ def test_exa_recall_hints_do_not_become_hard_filters_for_known_article(
 
     assert observed_bodies == [
         {
-            "query": "2027届 秋招 腾讯",
+            "query": "腾讯 官方公众号 2027届 秋招 2027 校招 校园招聘 秋季招聘",
             "includeDomains": ["mp.weixin.qq.com"],
             "numResults": 100,
             "type": "auto",

@@ -234,3 +234,36 @@ def test_hydration_can_select_a_distinct_observed_source() -> None:
     choose_hydration([first, second], discovery_request)
     assert second.hydration_decision == HydrationDecision.SELECTED
     assert second.hydration_decision_reasons == ["source_diversity"]
+
+
+def test_ranking_prefers_expected_account_and_numeric_query_variant_over_third_party() -> None:
+    discovery_request = request(
+        query="2027届 秋招",
+        companies=["腾讯"],
+        expected_accounts=[ExpectedAccount(display_names=["腾讯"])],
+    )
+    target = candidate(
+        80,
+        title="顶尖人才寻人启事｜青云计划2027校招全面启动",
+        account="腾讯",
+    )
+    official_but_off_topic = candidate(
+        2,
+        title="社招与校招｜腾讯混元发布新模型",
+        account="腾讯",
+    )
+    third_party = candidate(
+        26,
+        title="秋招逆袭之路，已拿腾讯等校招 offer",
+        account="第三方求职号",
+    )
+    unknown_account = candidate(1, title="腾讯2026实习生招聘", account=None)
+
+    ordered = rank_candidates(
+        [third_party, unknown_account, official_but_off_topic, target],
+        discovery_request,
+    )
+
+    assert ordered == [target, official_but_off_topic, unknown_account, third_party]
+    assert target.confidence == CandidateConfidence.HIGH
+    assert target.match_reasons == ["expected_account_hint", "query_title"]
