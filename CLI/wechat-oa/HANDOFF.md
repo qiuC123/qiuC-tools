@@ -1,6 +1,6 @@
 # WeChat OA 项目交接说明
 
-## 0.7.3 Exa deep 多查询召回修复（发布准备，2026-09-02）
+## 0.7.3 Exa deep 多查询召回修复（发布收口，2026-09-02）
 
 - 招聘雷达对 0.7.2 做了第二轮真实复验：整页重排成功把 Exa 原始 rank 74/80/88 的腾讯候选提升进前 20，证明本地排序修复有效；但已知腾讯原文仍不在 Exa 返回的完整 100 条结果中，因此本轮问题是 Provider 召回而不是候选截断或 Hydration。
 - Exa 改为一次有界 `deep` 搜索。结构化自然语言主查询包含目标公众号/公司、原查询、校招简称和软发布日期窗口；最多 10 条补充查询覆盖原始措辞、简称、人才计划和发布年份；固定搜索规划提示优先直接来源并降低其他公司、聚合、转载、面经和汇总内容。
@@ -8,7 +8,10 @@
 - Exa 搜索策略版本进入私有 query fingerprint。安装新版本后不会复用 0.7.2 的旧 Exa 页面缓存，也无需执行破坏性的 `discovery cache clear`；Brave 缓存指纹和对外 schema 不变。
 - 已知腾讯 URL 的 MockTransport 回归冻结完整 deep 请求体，并继续验证 HTTP `VERIFICATION_REQUIRED`、不自动打开 Chrome、候选保留为 partial 的边界。本轮未执行新的真实 Exa、微信或 Chrome。
 - Direct Discovery schema v1、单 JSON envelope、provider failure reasons、Windows 凭据所有权、严格 URL 校验、原始 Exa rank provenance 和 Brave 默认兼容契约均不变。
-- 0.7.3 发布准备验证为 430 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。候选 ZIP SHA-256 为 `be6c85c404f431af654ca6f1da7d07e622e9ea9a66947811315043a3c2b8daaf`。
+- PR #25 已 squash 合入 `main`，合并提交为 `b567a21`；远端 Tests and type checks 与 Windows package smoke 均通过。
+- 正式标签 `wechat-oa-v0.7.3` 和 GitHub Release 已发布。0.7.3 验证为 430 项 pytest 全绿、mypy 检查 48 个源文件无错误；PyInstaller 双命令包和全部离线冒烟通过。ZIP SHA-256 为 `be6c85c404f431af654ca6f1da7d07e622e9ea9a66947811315043a3c2b8daaf`。
+- 已从公开 Release 重新下载 ZIP 和校验文件，实算哈希、发布校验值和固定哈希三者一致。稳定安装与 0.7.3 → 0.7.2 → 0.7.3 双向回滚通过，最终为 `current=0.7.3`、`previous=0.7.2`，canonical Skill 已同步，Exa 凭据状态仍为 `configured=true`。
+- 0.7.3 构建后没有执行真实 Exa、微信文章回读或 Chrome；已知腾讯文章的真实召回仍由招聘雷达按冻结命令复验。
 
 ## 0.7.2 Exa 候选质量与 Hydration 排序修复（发布收口，2026-09-02）
 
