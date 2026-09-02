@@ -5,8 +5,8 @@
 1. 校验下载的 ZIP：
 
    ```powershell
-   Get-FileHash .\wechat-oa-0.6.0-windows-x64.zip -Algorithm SHA256
-   Get-Content .\wechat-oa-0.6.0-windows-x64.zip.sha256
+   Get-FileHash .\wechat-oa-0.7.0-windows-x64.zip -Algorithm SHA256
+   Get-Content .\wechat-oa-0.7.0-windows-x64.zip.sha256
    ```
 
    两处 SHA-256 应完全相同。
@@ -15,7 +15,7 @@
 3. 在仓库根目录运行安装脚本：
 
    ```powershell
-   pwsh .\scripts\install-release.ps1 -Version 0.6.0
+   pwsh .\scripts\install-release.ps1 -Version 0.7.0
    ```
 
    脚本先把完整产物复制到临时目录并完成离线冒烟测试，然后通过同一 NTFS 卷内的目录改名切换版本。安装位置固定为：
@@ -27,7 +27,7 @@
 4. 安装脚本会把 `current` prepend 到用户级 PATH；PATH 只需配置一次，以后升级和回滚都不需要修改。请新开一个终端，再运行 `wechat-oa --version`。旧的 wechat-oa PATH 条目只会产生警告，脚本不会自动删除，请在确认新版本可用后人工清理。
 5. 默认会同步 canonical `skills\wechat-oa` 和兼容 `skills\wxcli`，并在固定安装根目录中保存按版本编号的 Skill 快照。测试或多版本并存时可以显式使用 `-SkipPath` 或 `-SkipSkill`。
 
-本程序不需要 Python，但可见浏览器功能需要安装在默认路径的 Google Chrome。首次使用官方接口时运行 `wechat-oa auth configure`；首次使用文章发现时运行 `wechat-oa discovery auth configure --provider brave`。两类密钥分别进入 Windows 凭据管理器。
+本程序不需要 Python，但可见浏览器功能需要安装在默认路径的 Google Chrome。首次使用官方接口时运行 `wechat-oa auth configure`；首次使用对应文章发现后端时运行 `wechat-oa discovery auth configure --provider brave` 或 `wechat-oa discovery auth configure --provider exa`。各类密钥分别进入 Windows 凭据管理器。
 
 人工真实测试应明确选择稳定安装目录中的可执行文件，避免当前终端继续使用 PATH 中的旧版本：
 
@@ -83,7 +83,7 @@ pwsh .\scripts\install-release.ps1 -Rollback
 # 删除公共文章缓存
 wechat-oa cache clear
 
-# 删除 discovery 搜索缓存、候选历史和 checkpoint 状态；不删除 Brave 凭据
+# 删除 discovery 搜索缓存、候选历史和 checkpoint 状态；不删除 Brave/Exa 凭据
 wechat-oa discovery cache clear
 
 # 删除 wechat-oa 专用 Chrome profile 和本地浏览器状态

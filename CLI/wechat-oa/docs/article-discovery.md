@@ -1,8 +1,8 @@
 # WeChat Article Discovery Design
 
-**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; explicit, bounded Discovery media analysis is included in 0.6.0.**
+**Status: Direct Discovery and Agent-orchestrated Candidate Ingestion are implemented since wxcli 0.4.0. Browser reliability is implemented in 0.5.0; explicit, bounded Discovery media analysis is included in 0.6.0; native Exa Direct Discovery is included in 0.7.0.**
 
-This document records the wxcli 0.4.0 discovery foundation and its backward-compatible 0.5.0 browser reliability extension. The implementation preserves existing commands, JSON envelopes, exit codes, cache behavior, and read-only safety boundaries. Live Brave, WeChat, and Chrome smoke tests still require separate explicit authorization.
+This document records the wxcli discovery contract and its backward-compatible extensions. The implementation preserves existing commands, JSON envelopes, exit codes, cache behavior, and read-only safety boundaries. Live Brave, Exa, WeChat, and Chrome smoke tests still require separate explicit authorization.
 
 ## Product boundary
 
@@ -15,7 +15,7 @@ A search hit is only an Article Candidate. Search titles, snippets, account hint
 Direct Discovery is the implemented standalone path:
 
 ```text
-wxcli → Brave Discovery Provider → Article Candidate → Hydration → Article Evidence
+wxcli → Brave or Exa Discovery Provider → Article Candidate → Hydration → Article Evidence
 ```
 
 Agent-Orchestrated Discovery is the approved primary integration for callers that treat Codex CLI as a runtime dependency:
@@ -24,7 +24,7 @@ Agent-Orchestrated Discovery is the approved primary integration for callers tha
 Codex Search Orchestrator → Agent Reach / Exa → Candidate Batch → wxcli → Article Evidence
 ```
 
-The Search Orchestrator owns query expansion, multi-query strategy, and External Discovery Provider continuation. wxcli remains the trust boundary for WeChat URLs and source evidence. It never imports Agent Reach installation details, MCP configuration, or Exa credentials. See [ADR-0005](adr/0005-use-agent-orchestrated-discovery-as-primary-integration.md).
+The Search Orchestrator owns query expansion, multi-query strategy, and External Discovery Provider continuation. wxcli remains the trust boundary for WeChat URLs and source evidence. Native Direct Discovery credentials belong to wxcli; External Discovery Provider credentials used for Candidate Batch creation remain outside it. See [ADR-0005](adr/0005-use-agent-orchestrated-discovery-as-primary-integration.md) and [ADR-0009](adr/0009-support-native-exa-direct-discovery.md).
 
 ## CLI
 
@@ -37,6 +37,11 @@ wxcli --json discovery search "2027 校园招聘" `
   --published-after 2026-09-01 `
   --published-before 2027-12-31 `
   --limit 50
+
+wxcli --json discovery search "2027 校园招聘" `
+  --company "Example Company" `
+  --account "Example Recruiting" `
+  --provider exa --hydrate --no-browser
 ```
 
 Versioned machine input accepts either a file or standard input. It is mutually exclusive with the positional query and the corresponding search options:
@@ -72,6 +77,8 @@ Discovery credentials and cache management are separate from Official Account cr
 ```powershell
 wxcli discovery auth configure --provider brave
 wxcli --json discovery auth status --provider brave
+wxcli discovery auth configure --provider exa
+wxcli --json discovery auth status --provider exa
 wxcli --json discovery cache clear
 ```
 
@@ -86,7 +93,7 @@ wxcli --json discovery hydrate --input candidates.json
 Get-Content candidates.json | wxcli --json discovery hydrate --input -
 ```
 
-`discovery hydrate` does not call Brave, Exa, Agent Reach, or Codex. It validates the supplied batch, deduplicates strict WeChat Public URLs, records candidate history, selects bounded Hydration attempts, and produces wxcli-owned evidence. Direct `discovery search` remains available and continues to use Brave when a standalone search path is wanted.
+`discovery hydrate` does not call Brave, Exa, Agent Reach, or Codex. It validates the supplied batch, deduplicates strict WeChat Public URLs, records candidate history, selects bounded Hydration attempts, and produces wxcli-owned evidence. Direct `discovery search` defaults to Brave for compatibility and accepts `--provider exa` when the caller wants native Exa search.
 
 Candidate Batch policy may be overridden locally. Browser permission is deliberately a CLI-only decision and cannot be delegated through input JSON:
 
@@ -140,7 +147,7 @@ The Candidate Batch input schema is version 1:
 
 All objects reject unknown fields. Candidate URLs, strings, collection sizes, and the total document size are bounded before work begins: at most 100 candidates and 2 MiB of UTF-8 JSON per invocation. Provider names are lowercase extensible identifiers rather than a fixed Brave-or-Exa enum. Search provenance is untrusted metadata and never becomes Account Identity Evidence.
 
-The input cannot supply `discovered_at`, `last_seen_at`, `published_at`, Article Evidence, Hydration Attempts, identity-verification status, evidence hashes, API keys, Cookies, authorization headers, private business tags, or caller-internal trust scores. wxcli stamps observation times, creates stable identities, and derives every evidence field itself. Exa credentials remain entirely outside wxcli.
+The input cannot supply `discovered_at`, `last_seen_at`, `published_at`, Article Evidence, Hydration Attempts, identity-verification status, evidence hashes, API keys, Cookies, authorization headers, private business tags, or caller-internal trust scores. wxcli stamps observation times, creates stable identities, and derives every evidence field itself. A native Direct Discovery Exa credential may exist in wxcli's Windows credential store, but it never enters Candidate Batch data.
 
 The result is a separate `CandidateIngestionResult`; it does not change the Direct Discovery result:
 
@@ -208,7 +215,7 @@ The existing one-document JSON envelope remains unchanged. Discovery data uses s
   "ok": true,
   "data": {
     "schema_version": "1",
-    "search_provider": "brave",
+    "search_provider": "exa",
     "next_cursor": null,
     "checkpoint": "opaque-checkpoint",
     "summary": {
@@ -242,11 +249,13 @@ An Article Evidence contains the existing Article, Account Identity Evidence, ob
 
 A Hydration Attempt contains the attempted Content Provider, attempt time, verification status, and the existing safe structured error category. It never copies search snippets into Article content.
 
-An empty search is a successful result. If search succeeds but individual Hydrations fail, the command exits successfully with `summary.partial: true` and per-candidate failure states. A total Discovery Provider, authentication, or request failure uses the existing nonzero exit-code and error-envelope contract.
+An empty search is a successful result with `ok: true`, `summary.received: 0`, `summary.accepted: 0`, `summary.partial: false`, and an empty `candidates[]`. If search succeeds but individual Hydrations fail, the command exits successfully with `summary.partial: true` and per-candidate failure states. A total Discovery Provider, authentication, or request failure uses the existing nonzero exit-code and error-envelope contract.
+
+Native provider failures add stable safe details without changing the existing top-level codes: `AUTHENTICATION_ERROR` with exit code 6 uses reason `not_configured` or `credential_rejected`; `NETWORK_ERROR` with exit code 5 uses `rate_limited`, `timeout`, `network_error`, `provider_error`, or `invalid_response`. The details also contain the selected `provider`. Response bodies and credentials never enter the envelope.
 
 ## Discovery, ranking, and Hydration
 
-The implemented Direct Discovery Provider is Brave Web Search, queried with a mandatory `site:mp.weixin.qq.com/s` restriction. It is an optional deterministic path rather than a required dependency for Agent-Orchestrated Discovery. In the approved agent-first integration, Codex and Agent Reach may call Exa outside wxcli and submit only a Candidate Batch. Both paths record real search provenance and neither is presented as official WeChat search.
+The implemented Direct Discovery Providers are Brave Web Search and Exa Search. Brave is the backward-compatible default and receives a mandatory `site:mp.weixin.qq.com/s` restriction. Exa receives `includeDomains: ["mp.weixin.qq.com"]`; using a host-only upstream filter avoids relying on provider-specific path matching. In both cases, wxcli independently accepts only URLs that satisfy its strict HTTPS `mp.weixin.qq.com/s` contract. Agent-Orchestrated Discovery remains supported and may call an External Discovery Provider before submitting a Candidate Batch. Every path records real search provenance and none is presented as official WeChat search.
 
 Only direct HTTPS `mp.weixin.qq.com/s` results that satisfy the existing strict Public URL contract are accepted. wxcli does not follow arbitrary search wrappers or untrusted redirects. The fetchable URL is preserved, while query-form results use `__biz`, `mid`, and `idx` where available to create a stable identity that ignores tracking parameters.
 
@@ -287,7 +296,7 @@ External URLs observed in article markup are recorded with their raw value, norm
 
 - Search responses are cached for 15 minutes. Candidate history is retained for 180 days for `new_only`, `discovered_at`, and checkpoint behavior. The existing successful Article cache remains one hour and is unchanged.
 - `next_cursor` continues the current result page; `checkpoint` repeats the same normalized query while identifying candidates not previously seen for it. Callers still enforce permanent idempotency by `article_identity` or normalized source URL.
-- Brave credentials live in Windows Credential Manager under a discovery-specific keyring identity. Secrets never enter command arguments, JSON, stdin, stdout, stderr, logs, caches, fixtures, Git, or evidence bundles.
+- Brave and Exa credentials live separately in Windows Credential Manager under discovery-specific keyring identities. Native Direct Discovery never reads `EXA_API_KEY`; secrets never enter command arguments, environment handoff, JSON, stdin, stdout, stderr, logs, caches, fixtures, Git, or evidence bundles.
 - A search request necessarily sends its minimum query terms to the configured Discovery Provider. wxcli sends no caller-internal IDs, complete business databases, trust scores, private tags, credentials, or internal notes.
 - wxcli adds no remote telemetry. JSON results use stdout, sanitized diagnostics use stderr, and metrics remain local except for data required to execute the configured search.
 - Search requests time out after 30 seconds. Network failures retry once. HTTP 429 honors a bounded `Retry-After`; authentication and permission failures do not retry or fall back to another provider.
@@ -315,6 +324,12 @@ while embedded Article Evidence remains schema v1 and Media Evidence begins with
 Candidate Batch input remains schema v1 and can be media-enabled only through a local CLI control.
 The planned schema-v2 Direct Discovery Request JSON input is deferred from 0.6.0; the existing
 local CLI controls are the supported activation path for this release.
+
+### 0.7.0 (implemented)
+
+Native Exa Direct Discovery is available through `--provider exa` while Brave remains the default. Exa credentials are stored under a separate Windows credential identity, the CLI ignores `EXA_API_KEY`, the Direct Discovery result remains schema v1, and the one-document JSON envelope is unchanged. Provider failures expose stable safe reasons in `error.details` without changing the established authentication and network exit codes.
+
+Exa's upstream request is limited to the `mp.weixin.qq.com` host, and WeChat OA independently enforces its strict HTTPS article URL contract before accepting a candidate. Exa metadata remains untrusted provenance; only a successful WeChat Hydration can produce Article Evidence, source `published_at`, or Account Identity Evidence. Selecting Exa does not authorize Chrome or Media Analysis.
 
 ## Test and acceptance contract
 

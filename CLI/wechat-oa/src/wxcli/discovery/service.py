@@ -30,7 +30,7 @@ from wxcli.discovery.tokens import (
     encode_checkpoint,
     encode_cursor,
 )
-from wxcli.errors import WxcliError
+from wxcli.errors import ErrorCode, WxcliError
 from wxcli.evidence import EvidenceService
 
 
@@ -49,6 +49,17 @@ class DiscoveryService:
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._provider = provider
+        if (
+            isinstance(provider.page_size, bool)
+            or not isinstance(provider.page_size, int)
+            or provider.page_size < 1
+            or provider.page_size > 100
+        ):
+            raise WxcliError(
+                ErrorCode.LOCAL_CONFIGURATION_ERROR,
+                "The discovery provider page size is invalid.",
+            )
+        self._page_size = provider.page_size
         self._store = store
         self._now = now
         self._browser_decision = browser_decision
@@ -67,8 +78,8 @@ class DiscoveryService:
             if request.cursor
             else 0
         )
-        page_offset = position // 20
-        skip_in_page = position % 20
+        page_offset = position // self._page_size
+        skip_in_page = position % self._page_size
         checkpoint_time = (
             decode_checkpoint(request.checkpoint, self._provider.name, fingerprint)
             if request.checkpoint
@@ -88,7 +99,7 @@ class DiscoveryService:
             )
             if page is None:
                 page = self._provider.search_page(
-                    request, offset=page_offset, count=20
+                    request, offset=page_offset, count=self._page_size
                 )
                 self._store.put_page(
                     self._provider.name, fingerprint, page_offset, page, run_started
@@ -97,7 +108,7 @@ class DiscoveryService:
             received += len(visible_hits)
             reached_limit = False
             for index, hit in enumerate(visible_hits, start=skip_in_page):
-                next_position = page_offset * 20 + index + 1
+                next_position = page_offset * self._page_size + index + 1
                 try:
                     fetch_url, identity = article_identity(hit.url)
                 except WxcliError:
@@ -124,7 +135,9 @@ class DiscoveryService:
                         discovered_at=first_seen,
                         last_seen_at=last_seen,
                         search_provenance=SearchProvenance(
-                            provider="brave", rank=hit.rank, result_id=hit.result_id
+                            provider=self._provider.name,
+                            rank=hit.rank,
+                            result_id=hit.result_id,
                         ),
                         confidence=CandidateConfidence.LOW,
                     )
@@ -140,7 +153,7 @@ class DiscoveryService:
                 break
             page_offset = page.next_offset
             skip_in_page = 0
-            next_position = page_offset * 20
+            next_position = page_offset * self._page_size
 
         candidates = rank_candidates(candidates, request)
         choose_hydration(candidates, request)
@@ -171,7 +184,7 @@ class DiscoveryService:
         run_finished = self._now().astimezone(UTC)
         self._store.put_checkpoint(self._provider.name, fingerprint, run_finished)
         return DiscoveryResult(
-            search_provider="brave",
+            search_provider=self._provider.name,
             next_cursor=(
                 encode_cursor(self._provider.name, fingerprint, next_position)
                 if more_available
