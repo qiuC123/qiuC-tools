@@ -26,6 +26,8 @@ CLI/
 └─ gpt-sovits/  # GPT-SoVITS 本地推理与训练工作流 CLI
 ```
 
+GPT-SoVITS 也提供 [本地 MCP 接入与 10 个推理工具](CLI/gpt-sovits/docs/MCP.md)。
+
 ## WeChat OA
 
 - 源码：[`CLI/wechat-oa`](CLI/wechat-oa)

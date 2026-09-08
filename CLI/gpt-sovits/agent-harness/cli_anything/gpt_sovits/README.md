@@ -1,5 +1,11 @@
 # cli-anything-gpt-sovits
 
+Install the optional MCP adapter from the harness source with `pip install -e ".[mcp]"`.
+Run `gpt-sovits-mcp --checkout <absolute-source-path> --runtime <backend-python-path>`,
+or `python -m cli_anything.gpt_sovits.mcp_server`.
+The stdio server exposes ten inference tools; dataset and training remain CLI-only.
+See `CLI/gpt-sovits/docs/MCP.md` in the source repository for client configuration.
+
 This Python package provides the installed `cli-anything-gpt-sovits` command. It requires a
 separate, compatible GPT-SoVITS checkout and uses the real upstream service and training scripts.
 

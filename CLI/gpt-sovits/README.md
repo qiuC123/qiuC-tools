@@ -1,5 +1,8 @@
 # GPT-SoVITS CLI harness
 
+Local stdio MCP is available as `gpt-sovits-mcp`, with ten inference tools.
+See [MCP setup and client configuration](docs/MCP.md).
+
 This directory contains an agent-friendly CLI that operates a local
 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) checkout through its real API and
 training scripts. It does not include GPT-SoVITS itself, model weights, datasets, or media.
