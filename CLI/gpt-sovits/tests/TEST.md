@@ -1,5 +1,35 @@
 # GPT-SoVITS CLI public test plan
 
+## MCP publication validation (2026-09-08)
+
+Base: public main `767827c2f10bd8cd80875275beec5e7cc928dabd`.
+MCP implementation and its two test files match local implementation commit `39101ad`;
+the public CLI's portable configuration and generic training behavior were preserved.
+Installed this publication checkout using `py -3.13 -m pip install -e ".[mcp,test]"`.
+Set `CLI_ANYTHING_FORCE_INSTALLED=1`, `GPT_SOVITS_CHECKOUT` and
+`GPT_SOVITS_E2E_RUNTIME` to the explicitly configured local backend, then ran:
+
+```text
+py -3.13 -m pytest cli_anything/gpt_sovits/tests/ -q --tb=short
+330 passed in 184.20s (0:03:04)
+```
+
+No failures or skips. Includes 20 MCP protocol/unit tests and one real MCP Chinese inference
+workflow, with output WAV verification, overwrite refusal, backend shutdown and unchanged
+upstream configuration. MCP model-switch calls use dry-run; real switching is covered by
+the existing CLI E2E. Two client/example JSON blocks parsed successfully and both TEST.md
+copies are byte-identical. No model weights, audio or machine-specific config are included.
+
+## MCP publication test plan (2026-09-08)
+
+- Validate the ten CLI-derived tool schemas, literal argv handling, child-process isolation,
+  timeouts/cancellation, serialized calls, structured errors and real installed stdio sessions.
+- Run the published CLI regression suite with the MCP adapter installed from this checkout.
+- Exercise the real local backend through MCP: doctor, service lifecycle, models (switch dry-run),
+  reference inspection, dry-run synthesis, real Chinese WAV, overwrite refusal and shutdown.
+- Preserve public CLI portability and generic training behavior; do not publish local history,
+  private voice records, machine-specific configuration, media, model weights or runtime state.
+
 ## Scope
 
 The public suite validates the source-only harness without embedding models, media, datasets,
